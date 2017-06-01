@@ -84,24 +84,6 @@ static int cb(struct nfq_q_handle *qh, struct nfgenmsg *nfmsg,
     u_int32_t id = print_pkt(nfa);
     printf("entering callback\n");
     
-    // declare protocol bitmask
-    //NDPI_PROTOCOL_BITMASK all;
-
-    // set "malloc" and "free" functions
-    //set_ndpi_malloc(malloc_wrapper);
-    //set_ndpi_free(free_wrapper);
-    //set_ndpi_flow_malloc(NULL);
-    //set_ndpi_flow_free(NULL);
-
-    // create a detection module struct
-    //struct ndpi_detection_module_struct *ndpi_struct = ndpi_init_detection_module();
-
-    // set pool of protocols to all 
-    //NDPI_BITMASK_SET_ALL(all);
-    //ndpi_set_protocol_detection_bitmask2(ndpi_struct, &all);
-    
-    hello();
-
     return nfq_set_verdict(qh, id, NF_ACCEPT, 0, NULL);
 }
 

@@ -18,8 +18,3 @@ static void free_wrapper(void *freeable)
 {
     free(freeable);
 }
-
-void hello(void) 
-{
-    printf("Hello");
-}
