@@ -11,7 +11,7 @@ NDPIDIR = $(LIBSDIR)/nDPI
 PROGRAMNAME = ndpi_nfqueue_firewall
 
 CC=gcc
-CFLAGS= -Wall -g -I$(INCDIR) -I$(NDPIDIR)/src/include
+CFLAGS= -Wall -g -I$(INCDIR) -I$(NDPIDIR)/src/include $(LIBSDIR)/nDPI/lib/libndpi.a
 
 LIBS = -lndpi -lnetfilter_queue
 
