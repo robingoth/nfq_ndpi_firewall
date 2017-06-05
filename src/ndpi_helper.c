@@ -2,6 +2,7 @@
 #include <stdlib.h>
 
 #include "ndpi_main.h"
+#include "ndpi_helper.h"
 
 /*
  *  malloc wrapper function
@@ -22,8 +23,7 @@ static void free_wrapper(void *freeable)
 /*
  *  setup detection
  */
-
-void setup_detection(void)
+struct ndpi_detection_module_struct *setup_detection()
 {
     NDPI_PROTOCOL_BITMASK all;
     
@@ -39,20 +39,54 @@ void setup_detection(void)
 
     NDPI_BITMASK_SET_ALL(all);
     ndpi_set_protocol_detection_bitmask2(ndpi_struct, &all);
+
+    return ndpi_struct;
 }
 
-struct ndpi_proto detect_protocol()
+struct ndpi_flow_struct *create_ndpi_flow() 
+{
+    struct ndpi_flow_struct *ndpi_flow;
+    
+    if((ndpi_flow = ndpi_flow_malloc(SIZEOF_FLOW_STRUCT)) == NULL) {
+	NDPI_LOG(0, ndpi_struct, NDPI_LOG_ERROR, "[NDPI] %s(2): not enough memory\n", __FUNCTION__);
+    } else {
+	memset(ndpi_flow, 0, SIZEOF_FLOW_STRUCT);
+    }
+
+    return ndpi_flow;
+}
+
+char *detect_protocol(const unsigned char *packet, 
+			    const unsigned short packetlen, 
+			    struct timeval timestamp)
 {
     struct ndpi_id_struct *src, *dst;
     struct ndpi_flow_struct *ndpi_flow = NULL;
+  
+    struct ndpi_detection_module_struct *ndpi_struct = setup_detection();
+    ndpi_flow = create_ndpi_flow();
 
-    u_int8_t proto;
-    struct ndpi_tcphdr *tcph = NULL;
-    struct ndpi_udphdr *udph = NULL;
-    u_int16_t sport, dport, payload_len;
-    u_int8_t *payload;
-    u_int8_t src_to_dst_direction = 1;
-    struct ndpi_proto nproto = { NDPI_PROTOCOL_UNKNOWN, NDPI_PROTOCOL_UNKNOWN };
-
+    src = ndpi_malloc(SIZEOF_ID_STRUCT);
+    if (src == NULL) {
+	NDPI_LOG(0, ndpi_struct, NDPI_LOG_ERROR, "[NDPI] %s(3): not enough memory\n", __FUNCTION__);
+	return(NULL);
+    } else {
+	memset(src, 0, SIZEOF_ID_STRUCT);
+    }
     
+    dst = ndpi_malloc(SIZEOF_ID_STRUCT);
+    if (dst == NULL) {
+	NDPI_LOG(0, ndpi_struct, NDPI_LOG_ERROR, "[NDPI] %s(3): not enough memory\n", __FUNCTION__);
+	return(NULL);
+    } else {
+	memset(dst, 0, SIZEOF_ID_STRUCT);
+    }
+
+    u_int64_t tick = ((uint64_t) timestamp.tv_sec) * TICK_RESOLUTION + 
+	timestamp.tv_usec / (1000000 / TICK_RESOLUTION);
+
+    struct ndpi_proto detected_protocol = ndpi_detection_process_packet(ndpi_struct, ndpi_flow, 
+	   packet, packetlen, tick, src, dst);
+
+    return ndpi_get_proto_name(ndpi_struct, detected_protocol.app_protocol);
 }

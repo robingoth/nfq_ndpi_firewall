@@ -81,9 +81,33 @@ static u_int32_t print_pkt (struct nfq_data *tb)
 static int cb(struct nfq_q_handle *qh, struct nfgenmsg *nfmsg, 
 	struct nfq_data *nfa, void *data)
 {
+    char *proto;
+    unsigned char *packet_data;
     u_int32_t id = print_pkt(nfa);
     printf("entering callback\n");
     
+    struct timeval tv;
+    int is_success = nfq_get_timestamp(nfa, &tv);
+    
+    // if error
+    if (is_success != 0) {
+	printf("Timestamp was not retrieved. Skipping current packet.\n");
+    } else {	
+	unsigned short payload_size = nfq_get_payload(nfa, &packet_data);
+	// if error
+	if (payload_size == -1) {
+	    printf("Packet payload was not retrieved. Skipping current packet.\n");
+	} else {
+	    struct iphdr *ip_info = (struct iphdr *)&packet_data;
+	    unsigned short iphdr_size = ip_info->ihl << 2;
+
+	    proto = detect_protocol(packet_data, payload_size, tv);
+
+	    printf("proto = %s.\n", proto);
+	}
+	//proto = detect_protocol();
+    }
+
     return nfq_set_verdict(qh, id, NF_ACCEPT, 0, NULL);
 }
 
@@ -129,7 +153,7 @@ int main(int argc, char **argv)
     fd = nfq_fd(h);
 
     while ((rv = recv(fd, buf, sizeof(buf), 0)) >= 0) {
-	printf("packet received\n");
+	printf("%d bytes received\n", rv);
 	nfq_handle_packet(h, buf, rv);
     }
 

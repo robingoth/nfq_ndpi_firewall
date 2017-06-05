@@ -1,9 +1,29 @@
+#include <ndpi_main.h>
+
+#define SIZEOF_FLOW_STRUCT (sizeof(struct ndpi_flow_struct))
+#define TICK_RESOLUTION 1000
+
 /*
  *  malloc wrapper function
  */
-void *malloc_wrapper(size_t size);
+static void *malloc_wrapper(size_t size);
 
 /*
  * free wrapper function
  */
-void free_wrapper(void *freeable);
+static void free_wrapper(void *freeable);
+
+/*
+ *  
+ */
+struct ndpi_detection_module_struct *setup_detection();
+
+/*
+ *
+ */
+struct ndpi_flow_struct *create_ndpi_flow();
+
+/*
+ *
+ */
+char *detect_protocol(const unsigned char *packet, const unsigned short packetlen, struct timeval timestamp);
