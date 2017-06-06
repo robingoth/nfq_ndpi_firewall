@@ -1,21 +1,22 @@
+#include <signal.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <unistd.h>
 #include <netinet/in.h>
 #include <linux/types.h>
 #include <linux/netfilter.h>
-
 #include <libnetfilter_queue/libnetfilter_queue.h>
 
 #include "ndpi_helper.h"
 
-// Structs
-
 // Globals
+struct nfq_handle *h;
+struct nfq_q_handle *qh;
+// Forward definitions
 
-// Function definitions
-
-// returns packet id
+/*
+ *  prints some packet info and returns the packet ID
+ */
 static u_int32_t print_pkt (struct nfq_data *tb)
 {
     int id = 0;
@@ -78,13 +79,16 @@ static u_int32_t print_pkt (struct nfq_data *tb)
     return id;
 }
 
+/*
+ *  A callback function called for each captured packet
+ */
 static int cb(struct nfq_q_handle *qh, struct nfgenmsg *nfmsg, 
 	struct nfq_data *nfa, void *data)
 {
     char *proto;
     unsigned char *packet_data;
     u_int32_t id = print_pkt(nfa);
-    printf("entering callback\n");
+    // printf("entering callback\n");
     
     struct timeval tv;
     int is_success = nfq_get_timestamp(nfa, &tv);
@@ -98,23 +102,36 @@ static int cb(struct nfq_q_handle *qh, struct nfgenmsg *nfmsg,
 	if (payload_size == -1) {
 	    printf("Packet payload was not retrieved. Skipping current packet.\n");
 	} else {
-	    struct iphdr *ip_info = (struct iphdr *)&packet_data;
-	    unsigned short iphdr_size = ip_info->ihl << 2;
+	    //struct iphdr *ip_info = (struct iphdr *)&packet_data;
+	    // unsigned short iphdr_size = ip_info->ihl << 2;
 
 	    proto = detect_protocol(packet_data, payload_size, tv);
 
 	    printf("proto = %s.\n", proto);
 	}
-	//proto = detect_protocol();
     }
 
     return nfq_set_verdict(qh, id, NF_ACCEPT, 0, NULL);
 }
 
+/*
+ *  handle SIGINT, terminate program
+ */
+void sigint_handler(int signum) 
+{
+    printf("Caught an SIGINT signal.\n");
+    
+    printf("unbinding from a queue '0'\n");
+    nfq_destroy_queue(qh);
+
+    printf("closing library handle\n");
+    nfq_close(h);
+    
+    exit(0);
+}
+
 int main(int argc, char **argv) 
 {
-    struct nfq_handle *h;
-    struct nfq_q_handle *qh;
     int fd;
     int rv;
     char buf[4096] __attribute__ ((aligned));
@@ -151,17 +168,13 @@ int main(int argc, char **argv)
     }
     
     fd = nfq_fd(h);
+    
+    signal(SIGINT, sigint_handler);
 
     while ((rv = recv(fd, buf, sizeof(buf), 0)) >= 0) {
 	printf("%d bytes received\n", rv);
 	nfq_handle_packet(h, buf, rv);
     }
 
-    printf("unbinding from a queue '0'\n");
-    nfq_destroy_queue(qh);
-
-    printf("closing library handle\n");
-    nfq_close(h);
-    
-    exit(0);
+    return 0;
 }

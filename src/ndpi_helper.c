@@ -60,6 +60,7 @@ char *detect_protocol(const unsigned char *packet,
 			    const unsigned short packetlen, 
 			    struct timeval timestamp)
 {
+    char *return_value;
     struct ndpi_id_struct *src, *dst;
     struct ndpi_flow_struct *ndpi_flow = NULL;
   
@@ -88,5 +89,12 @@ char *detect_protocol(const unsigned char *packet,
     struct ndpi_proto detected_protocol = ndpi_detection_process_packet(ndpi_struct, ndpi_flow, 
 	   packet, packetlen, tick, src, dst);
 
-    return ndpi_get_proto_name(ndpi_struct, detected_protocol.app_protocol);
+    return_value = ndpi_get_proto_name(ndpi_struct, detected_protocol.app_protocol);
+    
+    ndpi_free(ndpi_struct);
+    ndpi_free(ndpi_flow);
+    ndpi_free(src);
+    ndpi_free(dst);
+
+    return return_value;
 }
