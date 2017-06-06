@@ -58,13 +58,13 @@ struct ndpi_flow_struct *create_ndpi_flow()
 
 char *detect_protocol(const unsigned char *packet, 
 			    const unsigned short packetlen, 
-			    struct timeval timestamp)
+			    struct timeval timestamp,
+			    struct ndpi_detection_module_struct *ndpi_struct)
 {
     char *return_value;
     struct ndpi_id_struct *src, *dst;
     struct ndpi_flow_struct *ndpi_flow = NULL;
   
-    struct ndpi_detection_module_struct *ndpi_struct = setup_detection();
     ndpi_flow = create_ndpi_flow();
 
     src = ndpi_malloc(SIZEOF_ID_STRUCT);
@@ -91,7 +91,6 @@ char *detect_protocol(const unsigned char *packet,
 
     return_value = ndpi_get_proto_name(ndpi_struct, detected_protocol.app_protocol);
     
-    ndpi_free(ndpi_struct);
     ndpi_free(ndpi_flow);
     ndpi_free(src);
     ndpi_free(dst);

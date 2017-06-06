@@ -26,4 +26,7 @@ struct ndpi_flow_struct *create_ndpi_flow();
 /*
  *
  */
-char *detect_protocol(const unsigned char *packet, const unsigned short packetlen, struct timeval timestamp);
+char *detect_protocol(const unsigned char *packet, 
+			const unsigned short packetlen, 
+			struct timeval timestamp,  
+			struct ndpi_detection_module_struct *ndpi_struct);
