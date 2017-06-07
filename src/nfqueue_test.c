@@ -234,9 +234,16 @@ void sigint_handler(int signum)
 
 int main(int argc, char **argv) 
 {
+    if (argc != 2) {
+	printf("Usage:\n./ndpi_nfqueue_firewall blacklist_path\n");
+	exit(-1);
+    }
+
     int fd;
     int rv;
     char buf[4096] __attribute__ ((aligned));
+    
+    char *blacklist_file_path = argv[1];
 
     h = nfq_open();
     if (!h) {
@@ -274,8 +281,13 @@ int main(int argc, char **argv)
     signal(SIGINT, sigint_handler);
 
     ndpi_struct = setup_detection();
-    blacklist = get_blacklist("/root/programming/ndpi_nfq_firewall/src/blacklist");
-    
+    blacklist = get_blacklist(blacklist_file_path);
+   
+    if (blacklist == NULL) {
+	printf("An error occured when loading blacklist file");
+	exit(-1);
+    }
+
     printf("Blacklisted protocols are:\n");
     
     int i = 0;
