@@ -14,6 +14,10 @@
 struct nfq_handle *h;
 struct nfq_q_handle *qh;
 struct ndpi_detection_module_struct *ndpi_struct;
+char **blacklist;
+
+// Forward declarations
+int is_blacklisted(char *string);
 
 /*
  *  prints some packet info and returns the packet ID
@@ -103,21 +107,64 @@ static int cb(struct nfq_q_handle *qh, struct nfgenmsg *nfmsg,
 	if (payload_size == -1) {
 	    printf("Packet payload was not retrieved. Skipping current packet.\n");
 	} else {
-	    //struct iphdr *ip_info = (struct iphdr *)&packet_data;
-	    // unsigned short iphdr_size = ip_info->ihl << 2;
-	    
 	    proto = detect_protocol(packet_data, payload_size, tv, ndpi_struct);
 	    printf("proto = %s.\n", proto);
 	}
     }
 
-    if (strcmp(proto, "Google") == 0) {
+    if (is_blacklisted(proto)) {
     	return nfq_set_verdict(qh, id, NF_DROP, 0, NULL);
     } else {
 	return nfq_set_verdict(qh, id, NF_ACCEPT, 0, NULL);
     }
 }
 
+/*
+ *  checks if a string array contains a specified string
+ *  IMPORTANT: last element of the string array must be NULL
+ */
+int is_blacklisted(char *string) 
+{
+    int i = 0;
+    while (blacklist[i] != NULL) {
+	if (!strcmp(string, blacklist[i])) {
+	    return 1;
+	}
+	i++;
+    }
+    return 0;
+}
+
+/*
+ * checks if string consists of -_0..9 a..z A..Z only
+ */
+int is_proto_name_valid(char *name)
+{
+    int result;
+    int i = 0;
+    for (i = 0; i < strlen(name); i++) {
+	if ((name[i] >= 48 && name[i] <= 57) || 
+		(name[i] >= 65 && name[i] <= 90) || 
+		(name[i] >= 97 && name[i] <= 122) || 
+		name[i] == 45 || name[i] == 95) {
+	    result = 1;
+	} else {
+	    return 0;
+	}
+    }
+
+    return result;
+}
+
+/*
+ *  read the list of blacklisted protocols from file
+ *  
+ *  Inputs: 
+ *	fileapth - path to file
+ *  Return values:
+ *	array of protocol names if successfull
+ *	NULL in case of error
+ */
 char **get_blacklist(char *filepath)
 {
     char **result = NULL;
@@ -133,31 +180,39 @@ char **get_blacklist(char *filepath)
     
     int line_num = 0;
     while (fgets(current_line, sizeof(current_line), fp)) {
-	result_tmp = (char **)realloc(result, (line_num + 1) * sizeof(char *));
-	
-	//current_line[strcspn(current_line, "\r\n")] = '\0';
 	current_line[strlen(current_line) - 1] = '\0';
-
-	if(result_tmp != NULL) {
-	    result = result_tmp;
-	    
-	    result[line_num] = malloc(sizeof(char) * strlen(current_line));
-	    //result[line_num] = current_line;
-	    strcpy(result[line_num], current_line);
+	
+	if (!is_proto_name_valid(current_line)) {
+	    printf("Protocol name %s is invalid.\n", current_line);
 	} else {
-	    printf("Memory could not be reallocated");
-	}
+	    result_tmp = (char **)realloc(result, (line_num + 1) * sizeof(char *));
+
+	    if(result_tmp != NULL) {
+		result = result_tmp;
+	    
+		result[line_num] = malloc(sizeof(char) * strlen(current_line));
+		strcpy(result[line_num], current_line);
+	    } else {
+		printf("Memory could not be reallocated.\n");
+		return NULL;
+	    }
     
-	line_num++;
+	    line_num++;
+	}
     }
 
     fclose(fp);
 
-    int i = 0;
-    for (i = 0; i < line_num; i++) {
-	printf("%s\n", result[i]);
+    result_tmp = (char **)realloc(result, (line_num) * sizeof(char *));
+    if (result_tmp != NULL) {
+	result = result_tmp;
+
+	result[line_num] = NULL;
+    } else {
+	printf("Memory could not be reallocated.\n");
+	return NULL;
     }
-    
+
     return result;
 }
 
@@ -219,7 +274,17 @@ int main(int argc, char **argv)
     signal(SIGINT, sigint_handler);
 
     ndpi_struct = setup_detection();
-    char **list = get_blacklist("/root/programming/ndpi_nfq_firewall/src/blacklist");
+    blacklist = get_blacklist("/root/programming/ndpi_nfq_firewall/src/blacklist");
+    
+    printf("Blacklisted protocols are:\n");
+    
+    int i = 0;
+    while (blacklist[i] != NULL) {
+	if (blacklist[i] != NULL) {
+	    printf("%s\n", blacklist[i]);
+	}
+	i++;
+    }
 
     while ((rv = recv(fd, buf, sizeof(buf), 0)) >= 0) {
 	printf("%d bytes received\n", rv);

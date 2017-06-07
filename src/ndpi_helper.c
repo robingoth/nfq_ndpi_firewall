@@ -97,3 +97,11 @@ char *detect_protocol(const unsigned char *packet,
 
     return return_value;
 }
+
+void print_proto_names(struct ndpi_detection_module_struct *ndpi_struct)
+{
+    int i = 0;
+    for (i = 0; i <= 227; i++) {
+	printf("%s\n", ndpi_get_proto_name(ndpi_struct, i));
+    }
+}
