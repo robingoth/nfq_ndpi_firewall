@@ -7,7 +7,7 @@
 /*
  *  malloc wrapper function
  */
-static void *malloc_wrapper(size_t size) 
+void *malloc_wrapper(size_t size) 
 {
     return malloc(size);
 }
@@ -15,7 +15,7 @@ static void *malloc_wrapper(size_t size)
 /*
  *  free wrapper function
  */
-static void free_wrapper(void *freeable) 
+void free_wrapper(void *freeable) 
 {
     free(freeable);
 }

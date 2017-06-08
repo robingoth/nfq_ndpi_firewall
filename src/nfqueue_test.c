@@ -10,33 +10,38 @@
 
 #include "ndpi_helper.h"
 
+// Preprocessor directives
+#define PROTOCOL_COUNT NDPI_MAX_SUPPORTED_PROTOCOLS + NDPI_MAX_NUM_CUSTOM_PROTOCOLS + 1
+
 // Globals
 struct nfq_handle *h;
 struct nfq_q_handle *qh;
 struct ndpi_detection_module_struct *ndpi_struct;
 char **blacklist;
 
+int blocked_packets;
+int allowed_packets;
+
+long long unsigned int protocol_counter[PROTOCOL_COUNT];
+
 // Forward declarations
 int is_blacklisted(char *string);
 
 /*
- *  prints some packet info and returns the packet ID
+ *  prints some packet info
  */
-static u_int32_t print_pkt (struct nfq_data *tb)
+void print_pkt (struct nfq_data *tb, struct nfqnl_msg_packet_hdr *pkt_hdr, 
+		char *master_protocol, char *app_protocol)
 {
     int id = 0;
-    struct nfqnl_msg_packet_hdr *ph;
     struct nfqnl_msg_packet_hw *hwph;
 
     u_int32_t mark, ifi;
     int ret;
     unsigned char *data;
 
-    ph = nfq_get_msg_packet_hdr(tb);
-    if (ph) {
-	id = ntohl(ph->packet_id);
-	printf("hw_protocol=0x%04x hook=%u id=%u ", ntohs(ph->hw_protocol), ph->hook, id);
-    }
+    id = ntohl(pkt_hdr->packet_id);
+    printf("hw_protocol=0x%04x hook=%u id=%u ", ntohs(pkt_hdr->hw_protocol), pkt_hdr->hook, id);
 
     hwph = nfq_get_packet_hw(tb);
     if (hwph) {
@@ -81,7 +86,7 @@ static u_int32_t print_pkt (struct nfq_data *tb)
 
     fputc('\n', stdout);
 
-    return id;
+    printf("proto = %s.%s.\n", master_protocol, app_protocol);
 }
 
 /*
@@ -90,12 +95,19 @@ static u_int32_t print_pkt (struct nfq_data *tb)
 static int cb(struct nfq_q_handle *qh, struct nfgenmsg *nfmsg, 
 	struct nfq_data *nfa, void *data)
 {
+    int id;
     struct ndpi_proto proto;
     char *app_proto; // e.g. Facebook
     char *master_proto; // e.g. HTTP
     unsigned char *packet_data;
-    u_int32_t id = print_pkt(nfa);
-    // printf("entering callback\n");
+    
+    struct nfqnl_msg_packet_hdr *pkt_hdr = nfq_get_msg_packet_hdr(nfa);
+    if (pkt_hdr) {
+	id = ntohl(pkt_hdr->packet_id);
+    } else {
+	printf("Packet header could not be retrieved.\n");
+	return -1; //error code of nfq_set_verdict
+    }
     
     struct timeval tv;
     int is_success = nfq_get_timestamp(nfa, &tv);
@@ -113,16 +125,21 @@ static int cb(struct nfq_q_handle *qh, struct nfgenmsg *nfmsg,
 	    master_proto = ndpi_get_proto_name(ndpi_struct, proto.master_protocol);
 	    app_proto = ndpi_get_proto_name(ndpi_struct, proto.app_protocol);;
 	    
-	    printf("proto = %s.%s.\n", master_proto, app_proto);
+	    protocol_counter[proto.app_protocol]++;
+
+	    print_pkt(nfa, pkt_hdr, master_proto, app_proto);
 	}
     }
 
     if (is_blacklisted(master_proto)) {
+	blocked_packets++;
 	return nfq_set_verdict(qh, id, NF_DROP, 0, NULL);
     } else {
 	if (is_blacklisted(app_proto)) {
+	    blocked_packets++;
 	    return nfq_set_verdict(qh, id, NF_DROP, 0, NULL);
 	} else {
+	    allowed_packets++;
 	    return nfq_set_verdict(qh, id, NF_ACCEPT, 0, NULL);
 	}
     }
@@ -226,6 +243,33 @@ char **get_blacklist(char *filepath)
 }
 
 /*
+ * prints results
+ */
+void print_results()
+{
+    int i = 0;
+    char *proto_name;
+    printf("*************************\n");
+    printf("*\tRESULTS\t\t*\n");
+    printf("*************************\n\n");
+
+    printf("Number of allowed packets: \t%d\n", allowed_packets);
+    printf("Number of blocked packets: \t%d\n", blocked_packets);
+
+    printf("\n");
+
+    // print number of packets per protocol
+    for (i = 0; i < PROTOCOL_COUNT; i++) {
+	if (protocol_counter[i] != 0) {
+	    
+	    proto_name = ndpi_get_proto_name(ndpi_struct, i);
+	    printf("%s:\t\t%llu\n", proto_name, protocol_counter[i]);
+	}
+    }
+    printf("\n");
+}
+
+/*
  *  handle SIGINT, terminate program
  */
 void sigint_handler(int signum) 
@@ -237,6 +281,8 @@ void sigint_handler(int signum)
 
     printf("closing library handle\n");
     nfq_close(h);
+
+    print_results();
     
     exit(0);
 }
@@ -253,6 +299,12 @@ int main(int argc, char **argv)
     char buf[4096] __attribute__ ((aligned));
     
     char *blacklist_file_path = argv[1];
+
+    // initialize protocol counter array to zeroes
+    int pc = 0;
+    for (pc = 0; pc < PROTOCOL_COUNT; pc++) {
+	protocol_counter[pc] = 0;
+    }
 
     h = nfq_open();
     if (!h) {
