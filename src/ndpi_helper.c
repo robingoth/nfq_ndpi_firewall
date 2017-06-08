@@ -56,12 +56,12 @@ struct ndpi_flow_struct *create_ndpi_flow()
     return ndpi_flow;
 }
 
-char *detect_protocol(const unsigned char *packet, 
+struct ndpi_proto detect_protocol(const unsigned char *packet, 
 			    const unsigned short packetlen, 
 			    struct timeval timestamp,
 			    struct ndpi_detection_module_struct *ndpi_struct)
 {
-    char *return_value;
+    //char *return_value[2];
     struct ndpi_id_struct *src, *dst;
     struct ndpi_flow_struct *ndpi_flow = NULL;
   
@@ -70,7 +70,7 @@ char *detect_protocol(const unsigned char *packet,
     src = ndpi_malloc(SIZEOF_ID_STRUCT);
     if (src == NULL) {
 	NDPI_LOG(0, ndpi_struct, NDPI_LOG_ERROR, "[NDPI] %s(3): not enough memory\n", __FUNCTION__);
-	return(NULL);
+	exit(-1);
     } else {
 	memset(src, 0, SIZEOF_ID_STRUCT);
     }
@@ -78,7 +78,7 @@ char *detect_protocol(const unsigned char *packet,
     dst = ndpi_malloc(SIZEOF_ID_STRUCT);
     if (dst == NULL) {
 	NDPI_LOG(0, ndpi_struct, NDPI_LOG_ERROR, "[NDPI] %s(3): not enough memory\n", __FUNCTION__);
-	return(NULL);
+	exit(-1);
     } else {
 	memset(dst, 0, SIZEOF_ID_STRUCT);
     }
@@ -89,13 +89,14 @@ char *detect_protocol(const unsigned char *packet,
     struct ndpi_proto detected_protocol = ndpi_detection_process_packet(ndpi_struct, ndpi_flow, 
 	   packet, packetlen, tick, src, dst);
 
-    return_value = ndpi_get_proto_name(ndpi_struct, detected_protocol.app_protocol);
+    //return_value[0] = ndpi_get_proto_name(ndpi_struct, detected_protocol.master_protocol);
+    //return_value[1] = ndpi_get_proto_name(ndpi_struct, detected_protocol.app_protocol);
     
     ndpi_free(ndpi_flow);
     ndpi_free(src);
     ndpi_free(dst);
 
-    return return_value;
+    return detected_protocol;
 }
 
 void print_proto_names(struct ndpi_detection_module_struct *ndpi_struct)

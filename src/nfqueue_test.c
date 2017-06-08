@@ -90,7 +90,9 @@ static u_int32_t print_pkt (struct nfq_data *tb)
 static int cb(struct nfq_q_handle *qh, struct nfgenmsg *nfmsg, 
 	struct nfq_data *nfa, void *data)
 {
-    char *proto;
+    struct ndpi_proto proto;
+    char *app_proto; // e.g. Facebook
+    char *master_proto; // e.g. HTTP
     unsigned char *packet_data;
     u_int32_t id = print_pkt(nfa);
     // printf("entering callback\n");
@@ -108,14 +110,21 @@ static int cb(struct nfq_q_handle *qh, struct nfgenmsg *nfmsg,
 	    printf("Packet payload was not retrieved. Skipping current packet.\n");
 	} else {
 	    proto = detect_protocol(packet_data, payload_size, tv, ndpi_struct);
-	    printf("proto = %s.\n", proto);
+	    master_proto = ndpi_get_proto_name(ndpi_struct, proto.master_protocol);
+	    app_proto = ndpi_get_proto_name(ndpi_struct, proto.app_protocol);;
+	    
+	    printf("proto = %s.%s.\n", master_proto, app_proto);
 	}
     }
 
-    if (is_blacklisted(proto)) {
-    	return nfq_set_verdict(qh, id, NF_DROP, 0, NULL);
+    if (is_blacklisted(master_proto)) {
+	return nfq_set_verdict(qh, id, NF_DROP, 0, NULL);
     } else {
-	return nfq_set_verdict(qh, id, NF_ACCEPT, 0, NULL);
+	if (is_blacklisted(app_proto)) {
+	    return nfq_set_verdict(qh, id, NF_DROP, 0, NULL);
+	} else {
+	    return nfq_set_verdict(qh, id, NF_ACCEPT, 0, NULL);
+	}
     }
 }
 
