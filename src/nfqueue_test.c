@@ -258,6 +258,7 @@ void print_results()
 
     printf("\n");
 
+    printf("Protocol statictics:\n\n");
     // print number of packets per protocol
     for (i = 0; i < PROTOCOL_COUNT; i++) {
 	if (protocol_counter[i] != 0) {
@@ -283,6 +284,9 @@ void sigint_handler(int signum)
     nfq_close(h);
 
     print_results();
+    
+    printf("Exiting nDPI detection module.\n");
+    ndpi_exit_detection_module(ndpi_struct);
     
     exit(0);
 }
@@ -359,10 +363,12 @@ int main(int argc, char **argv)
 	i++;
     }
 
-    while ((rv = recv(fd, buf, sizeof(buf), 0)) >= 0) {
+    while ((rv = recv(fd, buf, sizeof(buf), 0)) != -1) {
 	printf("%d bytes received\n", rv);
 	nfq_handle_packet(h, buf, rv);
     }
+
+    printf("shouldn't reach here");
 
     return 0;
 }
