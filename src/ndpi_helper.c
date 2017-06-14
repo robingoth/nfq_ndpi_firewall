@@ -70,7 +70,7 @@ struct ndpi_proto detect_protocol(const unsigned char *packet,
     src = ndpi_malloc(SIZEOF_ID_STRUCT);
     if (src == NULL) {
 	NDPI_LOG(0, ndpi_struct, NDPI_LOG_ERROR, "[NDPI] %s(3): not enough memory\n", __FUNCTION__);
-	exit(-1);
+	exit(1);
     } else {
 	memset(src, 0, SIZEOF_ID_STRUCT);
     }
@@ -78,7 +78,7 @@ struct ndpi_proto detect_protocol(const unsigned char *packet,
     dst = ndpi_malloc(SIZEOF_ID_STRUCT);
     if (dst == NULL) {
 	NDPI_LOG(0, ndpi_struct, NDPI_LOG_ERROR, "[NDPI] %s(3): not enough memory\n", __FUNCTION__);
-	exit(-1);
+	exit(1);
     } else {
 	memset(dst, 0, SIZEOF_ID_STRUCT);
     }

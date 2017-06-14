@@ -84,6 +84,20 @@ void print_pkt (struct nfq_data *tb, struct nfqnl_msg_packet_hdr *pkt_hdr,
 	printf("payload_len=%d ", ret);
     }
 
+    struct iphdr *ip_info = (struct iphdr *)data;
+    unsigned short dest_port;
+    if (ip_info->protocol == IPPROTO_TCP) {
+	struct tcphdr *tcp_info = (struct tcphdr *)(data + sizeof(*ip_info));
+	dest_port = ntohs(tcp_info->dest);
+    } else if (ip_info->protocol == IPPROTO_UDP) {
+	struct udphdr *udp_info = (struct udphdr *)(data + sizeof(*ip_info));
+	dest_port = ntohs(udp_info->dest);
+    } else {
+	dest_port = 0;
+    }
+
+    printf("dport=%d ", dest_port);
+
     fputc('\n', stdout);
 
     printf("proto = %s.%s.\n", master_protocol, app_protocol);
@@ -131,18 +145,21 @@ static int cb(struct nfq_q_handle *qh, struct nfgenmsg *nfmsg,
 	}
     }
 
+    u_int32_t verdict;
     if (is_blacklisted(master_proto)) {
 	blocked_packets++;
-	return nfq_set_verdict(qh, id, NF_DROP, 0, NULL);
+	verdict = (1 << 16) | NF_QUEUE;
     } else {
 	if (is_blacklisted(app_proto)) {
 	    blocked_packets++;
-	    return nfq_set_verdict(qh, id, NF_DROP, 0, NULL);
+	    verdict = (1 << 16) | NF_QUEUE;
 	} else {
 	    allowed_packets++;
-	    return nfq_set_verdict(qh, id, NF_ACCEPT, 0, NULL);
+	    verdict = NF_ACCEPT;
 	}
     }
+    
+    return nfq_set_verdict2(qh, id, verdict, 0xE, 0, NULL);
 }
 
 /*
@@ -350,7 +367,7 @@ int main(int argc, char **argv)
    
     if (blacklist == NULL) {
 	printf("An error occured when loading blacklist file");
-	exit(-1);
+	exit(1);
     }
 
     printf("Blacklisted protocols are:\n");
