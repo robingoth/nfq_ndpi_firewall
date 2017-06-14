@@ -9,11 +9,14 @@
 #include <libnetfilter_queue/libnetfilter_queue.h>
 
 #include "ndpi_helper.h"
+#include "rule_helper.h"
 
 // Preprocessor directives
 #define PROTOCOL_COUNT NDPI_MAX_SUPPORTED_PROTOCOLS + NDPI_MAX_NUM_CUSTOM_PROTOCOLS + 1
 
 // Globals
+int quiet = 0;
+
 struct nfq_handle *h;
 struct nfq_q_handle *qh;
 struct ndpi_detection_module_struct *ndpi_struct;
@@ -25,7 +28,6 @@ int allowed_packets;
 long long unsigned int protocol_counter[PROTOCOL_COUNT];
 
 // Forward declarations
-int is_blacklisted(char *string);
 
 /*
  *  prints some packet info
@@ -36,12 +38,12 @@ void print_pkt (struct nfq_data *tb, struct nfqnl_msg_packet_hdr *pkt_hdr,
     int id = 0;
     struct nfqnl_msg_packet_hw *hwph;
 
-    u_int32_t mark, ifi;
+    u_int32_t mark;
     int ret;
     unsigned char *data;
 
     id = ntohl(pkt_hdr->packet_id);
-    printf("hw_protocol=0x%04x hook=%u id=%u ", ntohs(pkt_hdr->hw_protocol), pkt_hdr->hook, id);
+    printf("id=%u ", id);
 
     hwph = nfq_get_packet_hw(tb);
     if (hwph) {
@@ -57,26 +59,6 @@ void print_pkt (struct nfq_data *tb, struct nfqnl_msg_packet_hdr *pkt_hdr,
     mark = nfq_get_nfmark(tb);
     if (mark) {
 	printf("mark=%u ", mark);
-    }
-
-    ifi = nfq_get_indev(tb);
-    if (ifi) {
-	printf("indev=%u ", ifi);
-    }
-
-    ifi = nfq_get_outdev(tb);
-    if (ifi) {
-	printf("outdev=%u ", ifi);
-    }
-
-    ifi = nfq_get_physindev(tb);
-    if (ifi) {
-	printf("physindev=%u ", ifi);
-    }
-
-    ifi = nfq_get_physoutdev(tb);
-    if (ifi) {
-	printf("physoutdev=%u ", ifi);
     }
 
     ret = nfq_get_payload(tb, &data);
@@ -96,6 +78,8 @@ void print_pkt (struct nfq_data *tb, struct nfqnl_msg_packet_hdr *pkt_hdr,
 	dest_port = 0;
     }
 
+    printf("saddr=%s ", inet_ntoa(*((struct in_addr *)&(ip_info->saddr))));
+    printf("daddr=%s ", inet_ntoa(*((struct in_addr *)&(ip_info->saddr))));
     printf("dport=%d ", dest_port);
 
     fputc('\n', stdout);
@@ -141,16 +125,18 @@ static int cb(struct nfq_q_handle *qh, struct nfgenmsg *nfmsg,
 	    
 	    protocol_counter[proto.app_protocol]++;
 
-	    print_pkt(nfa, pkt_hdr, master_proto, app_proto);
+	    if (!quiet) {
+		print_pkt(nfa, pkt_hdr, master_proto, app_proto);
+	    }
 	}
     }
 
     u_int32_t verdict;
-    if (is_blacklisted(master_proto)) {
+    if (is_blacklisted(master_proto, blacklist)) {
 	blocked_packets++;
 	verdict = (1 << 16) | NF_QUEUE;
     } else {
-	if (is_blacklisted(app_proto)) {
+	if (is_blacklisted(app_proto, blacklist)) {
 	    blocked_packets++;
 	    verdict = (1 << 16) | NF_QUEUE;
 	} else {
@@ -160,103 +146,6 @@ static int cb(struct nfq_q_handle *qh, struct nfgenmsg *nfmsg,
     }
     
     return nfq_set_verdict2(qh, id, verdict, 0xE, 0, NULL);
-}
-
-/*
- *  checks if a string array contains a specified string
- *  IMPORTANT: last element of the string array must be NULL
- */
-int is_blacklisted(char *string) 
-{
-    int i = 0;
-    while (blacklist[i] != NULL) {
-	if (!strcmp(string, blacklist[i])) {
-	    return 1;
-	}
-	i++;
-    }
-    return 0;
-}
-
-/*
- * checks if string consists of -_0..9 a..z A..Z only
- */
-int is_proto_name_valid(char *name)
-{
-    int result;
-    int i = 0;
-    for (i = 0; i < strlen(name); i++) {
-	if ((name[i] >= 48 && name[i] <= 57) || 
-		(name[i] >= 65 && name[i] <= 90) || 
-		(name[i] >= 97 && name[i] <= 122) || 
-		name[i] == 45 || name[i] == 95) {
-	    result = 1;
-	} else {
-	    return 0;
-	}
-    }
-
-    return result;
-}
-
-/*
- *  read the list of blacklisted protocols from file
- *  
- *  Inputs: 
- *	fileapth - path to file
- *  Return values:
- *	array of protocol names if successfull
- *	NULL in case of error
- */
-char **get_blacklist(char *filepath)
-{
-    char **result = NULL;
-    char **result_tmp = NULL;
-    FILE *fp;
-    char current_line[256];
-    
-    fp = fopen(filepath, "r");
-    if (fp == NULL) {
-	printf("Could not open the file %s\n", filepath);
-	return NULL;
-    }
-    
-    int line_num = 0;
-    while (fgets(current_line, sizeof(current_line), fp)) {
-	current_line[strlen(current_line) - 1] = '\0';
-	
-	if (!is_proto_name_valid(current_line)) {
-	    printf("Protocol name %s is invalid.\n", current_line);
-	} else {
-	    result_tmp = (char **)realloc(result, (line_num + 1) * sizeof(char *));
-
-	    if(result_tmp != NULL) {
-		result = result_tmp;
-	    
-		result[line_num] = malloc(sizeof(char) * strlen(current_line));
-		strcpy(result[line_num], current_line);
-	    } else {
-		printf("Memory could not be reallocated.\n");
-		return NULL;
-	    }
-    
-	    line_num++;
-	}
-    }
-
-    fclose(fp);
-
-    result_tmp = (char **)realloc(result, (line_num) * sizeof(char *));
-    if (result_tmp != NULL) {
-	result = result_tmp;
-
-	result[line_num] = NULL;
-    } else {
-	printf("Memory could not be reallocated.\n");
-	return NULL;
-    }
-
-    return result;
 }
 
 /*
@@ -310,9 +199,20 @@ void sigint_handler(int signum)
 
 int main(int argc, char **argv) 
 {
-    if (argc != 2) {
-	printf("Usage:\n./ndpi_nfqueue_firewall blacklist_path\n");
-	exit(-1);
+    if (argc > 3 || argc < 2) {
+	printf("Usage:\n./ndpi_nfqueue_firewall blacklist_path [-q]\n");
+	printf("Input arguments:\n");
+	printf("\tq:\tquiet mode. If set, does not print every packet's details.\n");
+	exit(1);
+    }
+
+    if (argc == 3) {
+	if (strcmp(argv[2], "-q") == 0) {
+	    quiet = 1;
+	} else {
+	    printf("Invalid flag %s\n", argv[2]);
+	    exit(1);
+	}
     }
 
     int fd;
@@ -381,7 +281,9 @@ int main(int argc, char **argv)
     }
 
     while ((rv = recv(fd, buf, sizeof(buf), 0)) != -1) {
-	printf("%d bytes received\n", rv);
+	if (!quiet) {
+	    printf("%d bytes received\n", rv);
+	}	
 	nfq_handle_packet(h, buf, rv);
     }
 

@@ -15,11 +15,11 @@ CFLAGS= -Wall -g -I$(INCDIR) -I$(NDPIDIR)/src/include $(LIBSDIR)/nDPI/lib/libndp
 
 LIBS = -lndpi -lnetfilter_queue
 
-_DEPS = ndpi_helper.h
+_DEPS = ndpi_helper.h rule_helper.h
 # Replace all filenames in dependencies with a relative path
 DEPS = $(patsubst %, $(INCDIR)/%, $(_DEPS))
 
-_OBJS = nfqueue_test.o ndpi_helper.o
+_OBJS = nfqueue_test.o ndpi_helper.o rule_helper.o
 # Replace all filenames in objects with a relative path
 OBJS = $(patsubst %, $(OBJDIR)/%, $(_OBJS))
 
