@@ -159,20 +159,26 @@ static int cb(struct nfq_q_handle *qh, struct nfgenmsg *nfmsg,
 	struct Rule *cur = &RulesList->rules[i];
 	
 	if (is_match(cur, src, dst, dport, master_proto, app_proto) == 1) {
-	    if (strcmp(cur->policy, "ALLOW") == 0) {
-		verdict = NF_ACCEPT;
-		break;
-	    } else if (strcmp(cur->policy, "DENY") == 0) {
-		verdict = NF_DROP;
-		break;
-	    } else if (strcmp(cur->policy, "REJECT") == 0) {
-		// TODO implement reject
-		verdict = NF_DROP;
-		break;
-	    } else if (strcmp(cur->policy, "ALLOW with IPS") == 0) {
-		verdict = (1 << 16) | NF_QUEUE;
-		break;
-	    } 
+	    switch (cur->policy) {
+		case ALLOW:
+		    verdict = NF_ACCEPT;
+		    break;
+		case DENY:
+		    verdict = NF_DROP;
+		    break;
+		case REJECT:
+		    // TODO implement reject
+		    verdict = NF_DROP;
+		    break;
+		case ALLOW_WITH_IPS:
+		    verdict = (1 << 16) | NF_QUEUE;
+		    break;
+		default:
+		    printf("ERROR: Policy is invalid.\n");
+		    exit(1);
+	    }
+	    // exit the loop in case of match
+	    break;
 	} else {
 	    verdict = NF_ACCEPT;
 	}

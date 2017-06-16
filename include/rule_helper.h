@@ -1,6 +1,12 @@
 #define MAX_RULES 100
 #define MAX_DATA 512
 
+// Preprocessor directives
+#define ALLOW           100
+#define DENY            200
+#define REJECT          300
+#define ALLOW_WITH_IPS  400
+
 // Structs
 struct Rule {
     int id;
@@ -9,7 +15,7 @@ struct Rule {
     char dst[16];
     unsigned short dport;
     char app[MAX_DATA];
-    char policy[MAX_DATA];
+    int policy;
 };
 
 struct Rules {
@@ -43,7 +49,7 @@ void rules_write(struct Connection *conn);
 void rules_create(struct Connection *conn);
 
 void rule_set(struct Connection *conn, int id, const char *src,
-	const char *dst, const unsigned short dport, const char *app, const char *policy);
+	const char *dst, const unsigned short dport, const char *app, const int policy);
 
 void rule_get(struct Connection *conn, int id);
 

@@ -13,7 +13,7 @@ PROGRAMNAME2 = RuleManager
 
 CC=gcc
 CFLAGS= -Wall -g -I$(INCDIR) -I$(NDPIDIR)/src/include $(LIBSDIR)/nDPI/lib/libndpi.a
-CFLAGS2 = -Wall -g -I$(INCDIR)
+CFLAGS2 = -Wall -g -I$(INCDIR) -L/usr/local/lib 
 
 LIBS = -lndpi -lnetfilter_queue
 
@@ -36,7 +36,7 @@ $(PROGRAMNAME): $(OBJS)
 	$(CC) -o $@ $^ $(CFLAGS) $(LIBS)
 
 $(PROGRAMNAME2): $(OBJS2) 
-	$(CC) -o $@ $^ $(CFLAGS2)
+	$(CC) -o $@ $^ $(CFLAGS2) -lpcre 
 
 clean:
 	rm -f $(OBJDIR)/*.o $(PROGRAMNAME) $(PROGRAMNAME2)

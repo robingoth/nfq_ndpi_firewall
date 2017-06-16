@@ -23,7 +23,26 @@ void die(const char *message, struct Connection *conn)
 
 void rule_print(struct Rule *rule)
 {
-    printf("%s %s:%d %s %s\n", rule->src, rule->dst, rule->dport, rule->app, rule->policy);
+    char *policy;
+    switch (rule->policy) {
+	case ALLOW:
+	    policy = "ALLOW";
+	    break;
+	case DENY:
+	    policy = "DENY";
+	    break;
+	case REJECT:
+	    policy = "REJECT";
+	    break;
+	case ALLOW_WITH_IPS:
+	    policy = "ALLOW with IPS";
+	    break;
+	default:
+	    printf("ERROR: rule print failed.\n");
+	    exit(1);
+    }
+
+    printf("%s %s:%d %s '%s'\n", rule->src, rule->dst, rule->dport, rule->app, policy);
 }
 
 void rules_load(struct Connection *conn) 
@@ -108,7 +127,7 @@ void rules_create(struct Connection *conn)
 }
 
 void rule_set(struct Connection *conn, int id, const char *src, 
-		const char *dst, const unsigned short dport, const char *app, const char *policy)
+		const char *dst, const unsigned short dport, const char *app, const int policy)
 {
     struct Rule *rule = &conn->rules->rules[id];
         
@@ -146,12 +165,7 @@ void rule_set(struct Connection *conn, int id, const char *src,
     }   
     
     //set policy
-    res = strncpy(rule->policy, policy, MAX_DATA);
-    rule->policy[sizeof(rule->policy) - 1] = '\0';
-
-    if (!res) {
-	die("Policy copy failed.", conn);
-    }
+    rule->policy = policy;
 }
 
 void rule_get(struct Connection *conn, int id) 
