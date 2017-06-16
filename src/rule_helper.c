@@ -1,99 +1,218 @@
+#include <assert.h>
+#include <errno.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 
- /*
-  * checks if a string array contains a specified string
-  * IMPORTANT: last element of the string array must be NULL
-  */
-int is_blacklisted(char *string, char **blacklist)
+#include "rule_helper.h"
+
+// Forward declarations
+void rules_close(struct Connection *conn);
+
+void die(const char *message, struct Connection *conn)
 {
-    int i = 0;
-    while (blacklist[i] != NULL) {
-	if (!strcmp(string, blacklist[i])) {
-	    return 1;
-	}
-	i++;
-    }
-    return 0;
-}
-
-/*
- * checks if string consists of -_0..9 a..z A..Z only
- */
-int is_proto_name_valid(char *name)
-{
-    int result;
-    int i = 0;
-    for (i = 0; i < strlen(name); i++) {
-	if ((name[i] >= 48 && name[i] <= 57) ||
-		(name[i] >= 65 && name[i] <= 90) ||
-		(name[i] >= 97 && name[i] <= 122) ||
-		name[i] == 45 || name[i] == 95) {
-	    result = 1;
-	} else {
-	    return 0;
-	}
-    }
-
-    return result;
-}
-
-/*
- *  read the list of blacklisted protocols from file
- *  
- *  Inputs: 
- *      fileapth - path to file
- *  Return values:
- *      array of protocol names if successfull
- *      NULL in case of error
- */
-char **get_blacklist(char *filepath)
-{
-    char **result = NULL;
-    char **result_tmp = NULL;
-    FILE *fp;
-    char current_line[256];
-
-    fp = fopen(filepath, "r");
-    if (fp == NULL) {
-	printf("Could not open the file %s\n", filepath);
-	return NULL;
-    }
-
-    int line_num = 0;
-    while (fgets(current_line, sizeof(current_line), fp)) {
-	current_line[strlen(current_line) - 1] = '\0';
-
-	if (!is_proto_name_valid(current_line)) {
-	    printf("Protocol name %s is invalid.\n", current_line);
-	} else {
-	    result_tmp = (char **)realloc(result, (line_num + 1) * sizeof(char *));
-
-	    if(result_tmp != NULL) {
-		result = result_tmp;
-		result[line_num] = malloc(sizeof(char) * strlen(current_line));
-		strcpy(result[line_num], current_line);
-	    } else {
-		printf("Memory could not be reallocated.\n");
-		return NULL;
-	    }
-
-	    line_num++;
-	}
-    }
-
-    fclose(fp);
-
-    result_tmp = (char **)realloc(result, (line_num) * sizeof(char *));
-    if (result_tmp != NULL) {
-	result = result_tmp;
-
-	result[line_num] = NULL;
+    if (errno) {
+	perror(message);
     } else {
-	printf("Memory could not be reallocated.\n");
-	return NULL;
+	printf("ERROR: %s\n", message);
     }
 
-    return result;
+    rules_close(conn);
+    exit(1);
+}
+
+void rule_print(struct Rule *rule)
+{
+    printf("%s %s:%d %s %s\n", rule->src, rule->dst, rule->dport, rule->app, rule->policy);
+}
+
+void rules_load(struct Connection *conn) 
+{
+    int rc = fread(conn->rules, sizeof(struct Rules), 1, conn->file);
+
+    if (rc != 1) {
+	die("Failed to load rules.", conn);
+    }
+}
+
+struct Connection *rules_open(const char *filename, char mode)
+{
+    struct Connection *conn = malloc(sizeof(struct Connection));
+
+    if (!conn) {
+	die("Memory error", conn);
+    }
+
+    conn->rules = malloc(sizeof(struct Rules));
+
+    if (!conn->rules) {
+	die("Memory error", conn);
+    }
+
+    if (mode == 'c') {
+	conn->file = fopen(filename, "w");
+    } else {
+	conn->file = fopen(filename, "r+");
+
+	if (conn->file) {
+	    rules_load(conn);
+	}
+    }
+
+    if (!conn->file) {
+	die("Failed to open the file", conn);
+    }
+
+    return conn;
+}
+
+void rules_close(struct Connection *conn)
+{
+    if (conn) {
+	if (conn->file) {
+	    fclose(conn->file);
+	}
+
+	if (conn->rules) {
+	    free(conn->rules);
+	}
+
+	free(conn);
+    }
+}
+
+void rules_write(struct Connection *conn)
+{
+    rewind(conn->file);
+
+    int rc = fwrite(conn->rules, sizeof(struct Rules), 1, conn->file);
+
+    if (rc != 1) {
+	die("Failed to write rules.", conn);
+    }
+
+    rc = fflush(conn->file);
+
+    if (rc == -1) {
+	die("Cannot flush rules.", conn);
+    }
+}
+
+void rules_create(struct Connection *conn)
+{
+    int i = 0;
+    for (i = 0; i < MAX_RULES; i++) {
+	struct Rule rule = { .id = i, .set = 0 };
+	conn->rules->rules[i] = rule;
+    }
+}
+
+void rule_set(struct Connection *conn, int id, const char *src, 
+		const char *dst, const unsigned short dport, const char *app, const char *policy)
+{
+    struct Rule *rule = &conn->rules->rules[id];
+        
+    if (rule->set) {
+	die("Already set, delete it first", conn);
+    }
+
+    rule->set = 1;
+
+    // set src
+    char *res = strncpy(rule->src, src, strlen(src)); // 16 is the IP address + \0
+    rule->src[sizeof(rule->src) - 1] = '\0';
+
+    if (!res) {
+	die("Source copy failed.", conn);
+    }   
+
+    // set dst
+    res = strncpy(rule->dst, dst, strlen(dst));
+    rule->dst[sizeof(rule->dst) - 1] = '\0';
+
+    if (!res) {
+	die("Destination copy failed.", conn);
+    }   
+    
+    // set dport
+    rule->dport = dport;
+    
+    // set app
+    res = strncpy(rule->app, app, MAX_DATA);
+    rule->app[sizeof(rule->app) - 1] = '\0';
+
+    if (!res) {
+	die("Application copy failed.", conn);
+    }   
+    
+    //set policy
+    res = strncpy(rule->policy, policy, MAX_DATA);
+    rule->policy[sizeof(rule->policy) - 1] = '\0';
+
+    if (!res) {
+	die("Policy copy failed.", conn);
+    }
+}
+
+void rule_get(struct Connection *conn, int id) 
+{
+    struct Rule *rule = &conn->rules->rules[id];
+
+    if (rule->set) {
+	rule_print(rule);
+    } else {
+	die("ID not set.", conn);
+    }
+}
+
+struct Rules *rules_get(struct Connection *conn)
+{
+    struct Rules *rules = conn->rules;
+    
+    if (rules) {
+	return rules;
+    } else {
+	return NULL;
+    }
+}
+
+void rule_delete(struct Connection *conn, int id) 
+{
+    struct Rule rule = { .id = id, .set = 0  };
+    conn->rules->rules[id] = rule;
+}
+
+void rules_list(struct Connection *conn)
+{
+    int i = 0;
+    struct Rules *rules = conn->rules;
+
+    for (i = 0; i < MAX_RULES; i++) {
+	struct Rule *cur = &rules->rules[i];
+
+	if (cur->set) {
+	    rule_print(cur);
+	}
+    }
+}
+
+int is_match(struct Rule *rule, char *src, char *dst, unsigned short dport, 
+		char *master_proto, char *app_proto)
+{
+    int ret = 0;
+    char *any = "any";
+
+    if ((strcmp(rule->src, src) == 0) || (strcmp(rule->src, any) == 0)) {
+	if ((strcmp(rule->dst, dst) == 0) || (strcmp(rule->dst, any) == 0)) {
+	    if ((rule->dport == dport) || (rule->dport == 0)) {
+		if ((strcmp(master_proto, rule->app) == 0) || 
+			(strcmp(app_proto, rule->app) == 0) || 
+			(strcmp(rule->app, any) == 0)) {
+		    ret = 1;
+		}
+	    }
+	}
+    }
+
+    return ret;
 }

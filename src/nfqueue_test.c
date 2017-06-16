@@ -2,6 +2,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <sys/stat.h>
 #include <unistd.h>
 #include <netinet/in.h>
 #include <linux/types.h>
@@ -15,18 +16,20 @@
 #define PROTOCOL_COUNT NDPI_MAX_SUPPORTED_PROTOCOLS + NDPI_MAX_NUM_CUSTOM_PROTOCOLS + 1
 
 // Globals
-int quiet = 0;
+int Quiet = 0;
 
-struct nfq_handle *h;
-struct nfq_q_handle *qh;
-struct ndpi_detection_module_struct *ndpi_struct;
-char **blacklist;
+struct nfq_handle *H;
+struct nfq_q_handle *Qh;
+struct ndpi_detection_module_struct *NdpiStruct;
 
-int blocked_packets;
-int allowed_packets;
+struct Rules *RulesList;
+int RuleCounter;
 
-long long unsigned int protocol_counter[PROTOCOL_COUNT];
+long long unsigned int BlockedPackets;
+long long unsigned int AllowedPackets;
+long long unsigned int ProtocolCounter[PROTOCOL_COUNT];
 
+time_t OldMTime = 0;
 // Forward declarations
 
 /*
@@ -79,7 +82,7 @@ void print_pkt (struct nfq_data *tb, struct nfqnl_msg_packet_hdr *pkt_hdr,
     }
 
     printf("saddr=%s ", inet_ntoa(*((struct in_addr *)&(ip_info->saddr))));
-    printf("daddr=%s ", inet_ntoa(*((struct in_addr *)&(ip_info->saddr))));
+    printf("daddr=%s ", inet_ntoa(*((struct in_addr *)&(ip_info->daddr))));
     printf("dport=%d ", dest_port);
 
     fputc('\n', stdout);
@@ -119,28 +122,58 @@ static int cb(struct nfq_q_handle *qh, struct nfgenmsg *nfmsg,
 	if (payload_size == -1) {
 	    printf("Packet payload was not retrieved. Skipping current packet.\n");
 	} else {
-	    proto = detect_protocol(packet_data, payload_size, tv, ndpi_struct);
-	    master_proto = ndpi_get_proto_name(ndpi_struct, proto.master_protocol);
-	    app_proto = ndpi_get_proto_name(ndpi_struct, proto.app_protocol);;
+	    proto = detect_protocol(packet_data, payload_size, tv, NdpiStruct);
+	    master_proto = ndpi_get_proto_name(NdpiStruct, proto.master_protocol);
+	    app_proto = ndpi_get_proto_name(NdpiStruct, proto.app_protocol);;
 	    
-	    protocol_counter[proto.app_protocol]++;
+	    ProtocolCounter[proto.app_protocol]++;
 
-	    if (!quiet) {
+	    if (!Quiet) {
 		print_pkt(nfa, pkt_hdr, master_proto, app_proto);
 	    }
 	}
     }
 
-    u_int32_t verdict;
-    if (is_blacklisted(master_proto, blacklist)) {
-	blocked_packets++;
-	verdict = (1 << 16) | NF_QUEUE;
+    unsigned char *p_data;
+    nfq_get_payload(nfa, &p_data);;
+    struct iphdr *ip_info = (struct iphdr *)p_data;
+    unsigned short dport;
+
+    if (ip_info->protocol == IPPROTO_TCP) {
+	struct tcphdr *tcp_info = (struct tcphdr *)(p_data + sizeof(*ip_info));
+	dport = ntohs(tcp_info->dest);
+    } else if (ip_info->protocol == IPPROTO_UDP) {
+	struct udphdr *udp_info = (struct udphdr *)(p_data + sizeof(*ip_info));
+	dport = ntohs(udp_info->dest);
     } else {
-	if (is_blacklisted(app_proto, blacklist)) {
-	    blocked_packets++;
-	    verdict = (1 << 16) | NF_QUEUE;
+	dport = 0;
+    }
+
+    char *src = inet_ntoa(*((struct in_addr *)&(ip_info->saddr)));
+    char *dst = inet_ntoa(*((struct in_addr *)&(ip_info->daddr)));
+
+    u_int32_t verdict;
+    
+    int i = 0;
+    for (i = 0; i < RuleCounter; i++) {
+	struct Rule *cur = &RulesList->rules[i];
+	
+	if (is_match(cur, src, dst, dport, master_proto, app_proto) == 1) {
+	    if (strcmp(cur->policy, "ALLOW") == 0) {
+		verdict = NF_ACCEPT;
+		break;
+	    } else if (strcmp(cur->policy, "DENY") == 0) {
+		verdict = NF_DROP;
+		break;
+	    } else if (strcmp(cur->policy, "REJECT") == 0) {
+		// TODO implement reject
+		verdict = NF_DROP;
+		break;
+	    } else if (strcmp(cur->policy, "ALLOW with IPS") == 0) {
+		verdict = (1 << 16) | NF_QUEUE;
+		break;
+	    } 
 	} else {
-	    allowed_packets++;
 	    verdict = NF_ACCEPT;
 	}
     }
@@ -159,18 +192,18 @@ void print_results()
     printf("*\tRESULTS\t\t*\n");
     printf("*************************\n\n");
 
-    printf("Number of allowed packets: \t%d\n", allowed_packets);
-    printf("Number of blocked packets: \t%d\n", blocked_packets);
+    printf("Number of allowed packets: \t%lld\n", AllowedPackets);
+    printf("Number of blocked packets: \t%lld\n", BlockedPackets);
 
     printf("\n");
 
     printf("Protocol statictics:\n\n");
     // print number of packets per protocol
     for (i = 0; i < PROTOCOL_COUNT; i++) {
-	if (protocol_counter[i] != 0) {
+	if (ProtocolCounter[i] != 0) {
 	    
-	    proto_name = ndpi_get_proto_name(ndpi_struct, i);
-	    printf("%s:\t\t%llu\n", proto_name, protocol_counter[i]);
+	    proto_name = ndpi_get_proto_name(NdpiStruct, i);
+	    printf("%s:\t\t%llu\n", proto_name, ProtocolCounter[i]);
 	}
     }
     printf("\n");
@@ -184,17 +217,60 @@ void sigint_handler(int signum)
     printf("Caught an SIGINT signal.\n");
     
     printf("unbinding from a queue '0'\n");
-    nfq_destroy_queue(qh);
+    nfq_destroy_queue(Qh);
 
     printf("closing library handle\n");
-    nfq_close(h);
+    nfq_close(H);
 
     print_results();
     
     printf("Exiting nDPI detection module.\n");
-    ndpi_exit_detection_module(ndpi_struct);
+    ndpi_exit_detection_module(NdpiStruct);
     
     exit(0);
+}
+
+void update_rules(char *filepath)
+{
+    struct stat file_stat;
+    int err = stat(filepath, &file_stat);
+    if (err != 0) {
+	perror(" [file_is_modified] stat ");
+	exit(1);
+    }
+
+    if (file_stat.st_mtime > OldMTime) {
+	OldMTime = file_stat.st_mtime;
+	
+	struct Connection *conn = rules_open(filepath, 'g');
+	RulesList = rules_get(conn);
+
+	if (RulesList == NULL) {
+	    printf("Unable to retrieve rules.\n");
+	    exit(1);
+	}
+
+	int c = 0;
+	for (c = 0; c < MAX_RULES; c++) {
+	    struct Rule *cur = &RulesList->rules[c];
+	    if(cur->set == 1) {
+		RuleCounter++;
+	    }
+	}
+    }
+
+    if (!Quiet) {
+	printf("\nCurrent set of Rules:\n");
+
+	int i = 0;
+    	for (i = 0; i < MAX_RULES; i++) {
+    	    struct Rule *cur = &RulesList->rules[i];
+    	    if (cur->set == 1) {
+    	        rule_print(cur);
+    	    }
+    	}
+	printf("\n");
+    }
 }
 
 int main(int argc, char **argv) 
@@ -202,13 +278,13 @@ int main(int argc, char **argv)
     if (argc > 3 || argc < 2) {
 	printf("Usage:\n./ndpi_nfqueue_firewall blacklist_path [-q]\n");
 	printf("Input arguments:\n");
-	printf("\tq:\tquiet mode. If set, does not print every packet's details.\n");
+	printf("\tq:\tQuiet mode. If set, does not print every packet's details.\n");
 	exit(1);
     }
 
     if (argc == 3) {
 	if (strcmp(argv[2], "-q") == 0) {
-	    quiet = 1;
+	    Quiet = 1;
 	} else {
 	    printf("Invalid flag %s\n", argv[2]);
 	    exit(1);
@@ -219,72 +295,57 @@ int main(int argc, char **argv)
     int rv;
     char buf[4096] __attribute__ ((aligned));
     
-    char *blacklist_file_path = argv[1];
+    char *rules_file_path = argv[1];
 
     // initialize protocol counter array to zeroes
     int pc = 0;
     for (pc = 0; pc < PROTOCOL_COUNT; pc++) {
-	protocol_counter[pc] = 0;
+	ProtocolCounter[pc] = 0;
     }
 
-    h = nfq_open();
-    if (!h) {
+    H = nfq_open();
+    if (!H) {
 	fprintf(stderr, "error during nfq_open()\n");
 	exit(1);
     }
 
     printf("unbinding existing nf_queue handler for AF_INET (if any)\n");
-    if (nfq_unbind_pf(h, AF_INET) < 0) {
+    if (nfq_unbind_pf(H, AF_INET) < 0) {
 	fprintf(stderr, "erorr during nfq_unbind_pf()\n");
 	exit(1);
     }
 
     printf("binding existing nf_queue handler for AF_INET (if any)\n");
-    if (nfq_bind_pf(h, AF_INET) < 0) {
+    if (nfq_bind_pf(H, AF_INET) < 0) {
         fprintf(stderr, "erorr during nfq_bind_pf()\n");
 	exit(1);
     }
 
     printf("binding this socket to queue '0'\n");
-    qh = nfq_create_queue(h, 0, &cb, NULL);
-    if (!qh) {
+    Qh = nfq_create_queue(H, 0, &cb, NULL);
+    if (!Qh) {
 	fprintf(stderr, "error during nfq_create_queue()\n");
 	exit(1);
     }
 
     printf("setting copy_packet mode\n");
-    if (nfq_set_mode(qh, NFQNL_COPY_PACKET, 0xffff) < 0) {
+    if (nfq_set_mode(Qh, NFQNL_COPY_PACKET, 0xffff) < 0) {
 	fprintf(stderr, "can't set packet_copy mode\n");
 	exit(1);
     }
     
-    fd = nfq_fd(h);
+    fd = nfq_fd(H);
     
     signal(SIGINT, sigint_handler);
 
-    ndpi_struct = setup_detection();
-    blacklist = get_blacklist(blacklist_file_path);
-   
-    if (blacklist == NULL) {
-	printf("An error occured when loading blacklist file");
-	exit(1);
-    }
-
-    printf("Blacklisted protocols are:\n");
-    
-    int i = 0;
-    while (blacklist[i] != NULL) {
-	if (blacklist[i] != NULL) {
-	    printf("%s\n", blacklist[i]);
-	}
-	i++;
-    }
-
+    NdpiStruct = setup_detection();
+  
     while ((rv = recv(fd, buf, sizeof(buf), 0)) != -1) {
-	if (!quiet) {
+	update_rules(rules_file_path);
+	if (!Quiet) {
 	    printf("%d bytes received\n", rv);
 	}	
-	nfq_handle_packet(h, buf, rv);
+	nfq_handle_packet(H, buf, rv);
     }
 
     printf("shouldn't reach here");

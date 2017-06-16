@@ -1,5 +1,8 @@
 *.swp
-ndpi_nfqueue_firewall
+RuleManager
+NdpiNfqueueFirewall
+rules.db
+
 
 # Object files
 src/obj/*.o

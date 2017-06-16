@@ -1,7 +1,57 @@
+#define MAX_RULES 100
+#define MAX_DATA 512
+
+// Structs
+struct Rule {
+    int id;
+    int set;
+    char src[16];
+    char dst[16];
+    unsigned short dport;
+    char app[MAX_DATA];
+    char policy[MAX_DATA];
+};
+
+struct Rules {
+    struct Rule rules[MAX_RULES];
+};
+
+struct Connection {
+    FILE *file;
+    struct Rules *rules;
+};
+
+
 int is_blacklisted(char *string, char **blacklist);
 
 int is_proto_name_valid(char *name);
 
 char **get_blacklist(char *filepath);
 
+void die(const char *message, struct Connection *conn);
 
+void rule_print(struct Rule *rule);
+
+void rules_load(struct Connection *conn);
+
+struct Connection *rules_open(const char *filename, char mode);
+
+void rules_close(struct Connection *conn);
+
+void rules_write(struct Connection *conn);
+
+void rules_create(struct Connection *conn);
+
+void rule_set(struct Connection *conn, int id, const char *src,
+	const char *dst, const unsigned short dport, const char *app, const char *policy);
+
+void rule_get(struct Connection *conn, int id);
+
+struct Rules *rules_get(struct Connection *conn);
+
+void rule_delete(struct Connection *conn, int id);
+
+void rules_list(struct Connection *conn);
+
+int is_match(struct Rule *rule, char *src, char *dst, unsigned short dport,
+		char *master_proto, char *app_proto);
