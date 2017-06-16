@@ -4,4 +4,5 @@ how to build:
 - clone nDPI to lib directory
 - compile nDPI
 - cd to src directory
-- use make to compile the solution
+- use *make* to compile the solution
+- use *make RuleManager* to compile Rule Manager tool
