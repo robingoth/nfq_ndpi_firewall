@@ -61,3 +61,5 @@ void rules_list(struct Connection *conn);
 
 int is_match(struct Rule *rule, char *src, char *dst, unsigned short dport,
 		char *master_proto, char *app_proto);
+
+int get_rules_num(struct Connection *conn);

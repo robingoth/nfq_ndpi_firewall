@@ -230,3 +230,18 @@ int is_match(struct Rule *rule, char *src, char *dst, unsigned short dport,
 
     return ret;
 }
+
+int get_rules_num(struct Connection *conn)
+{
+    int res = 0;
+    int i = 0;
+    for (i = 0; i < MAX_RULES; i++) {
+	struct Rule *cur = &conn->rules->rules[i];
+
+	if (cur->set == 1) {
+	    res++;
+	}
+    }
+
+    return res;
+}

@@ -5,7 +5,9 @@
 
 #include "rule_helper.h"
 
-int validate_ip_string(char *string, char *pattern)
+const char *ip_pattern = "(\\d+)\\.(\\d+)\\.(\\d+)\\.(\\d+)";
+
+int validate_ip_string(char *string)
 {
     if (strcmp(string, "any") == 0) {
 	return 1;
@@ -20,16 +22,16 @@ int validate_ip_string(char *string, char *pattern)
 
     int ret = 0;
 
-    re_compiled = pcre_compile(pattern, 0, &pcre_error_str, &pcre_error_offset, NULL);
+    re_compiled = pcre_compile(ip_pattern, 0, &pcre_error_str, &pcre_error_offset, NULL);
 
     if (re_compiled == NULL) {
-	printf("ERROR: could not compile '%s': %s\n", pattern, pcre_error_str);
+	printf("ERROR: could not compile '%s': %s\n", ip_pattern, pcre_error_str);
 	exit(1);
     }
 
     pcre_ex = pcre_study(re_compiled, 0, &pcre_error_str);
     if (pcre_error_str != NULL) {
-	printf("ERROR: Could not study '%s': %s\n", pattern, pcre_error_str);
+	printf("ERROR: Could not study '%s': %s\n", ip_pattern, pcre_error_str);
     }
 
     pcre_exec_ret = pcre_exec(re_compiled, pcre_ex, string, strlen(string), 0, 0, sub_str_vec, 30);
@@ -41,9 +43,29 @@ int validate_ip_string(char *string, char *pattern)
     return ret;
 }
 
+int set_policy(char *policy_str)
+{
+    int result;
+        
+    if (strcmp(policy_str, "ALLOW") == 0) {
+        result = ALLOW;
+    } else if (strcmp(policy_str, "DENY") == 0) {
+	result = DENY;
+    } else if (strcmp(policy_str, "REJECT") == 0) {
+	result = REJECT;
+    } else if (strcmp(policy_str, "ALLOW with IPS") == 0) {
+	result = ALLOW_WITH_IPS; 
+    } else {
+	printf ("%s is an invalid policy.\n", policy_str);
+	printf("Valid options are: 'ALLOW', 'DENY', 'REJECT', 'ALLOW with IPS'.\n");
+	exit(1);
+    }
+
+    return result;
+}
+
 int main(int argc, char **argv)
 {
-
     if (argc < 3) {
 	printf("USAGE: RuleManager <rulesfile> <action> [action params]\n");
 	exit(1);
@@ -53,6 +75,10 @@ int main(int argc, char **argv)
     char action = argv[2][0];
     struct Connection *conn = rules_open(filename, action);
     
+    unsigned short dport;
+    int policy;
+    char *src, *dst, *app, *policy_str;
+
     int id = 0;
     if (argc > 3) {
 	id = atoi(argv[3]);
@@ -63,7 +89,40 @@ int main(int argc, char **argv)
     }
     
     switch(action) {
-	case 'c':
+	case 'A':
+	if (argc != 8) {
+	    die("Need src, dst, dport, app and policy to append.", conn);
+	}
+
+	id = get_rules_num(conn);
+
+	if (id >= MAX_RULES) {
+	    printf("Maximum number of rules has been reached, exiting.\n");
+	    exit(1);
+	}
+		
+	src = argv[3];
+	dst = argv[4];
+	dport = (unsigned short)atoi(argv[5]);
+	app = argv[6];
+	policy_str = argv[7];
+
+	if (validate_ip_string(src) == 0) {
+	    printf("ERROR: '%s' ip is invalid.\n", src);
+	    exit(1);
+	}
+
+	if (validate_ip_string(dst) == 0) {
+		printf("ERROR: '%s' ip is invalid.\n", dst);
+		exit(1);
+	}
+
+	policy = set_policy(policy_str);
+
+	rule_set(conn, id, src, dst, dport, app, policy);
+	rules_write(conn);
+	break;
+    case 'c':
 	    rules_create(conn);
 	    rules_write(conn);
 	    break;
@@ -79,41 +138,23 @@ int main(int argc, char **argv)
 	    die("Need id, src, dst, dport, app and policy to set.", conn);
 	}
 	
-	unsigned short dport;
-	int policy;
-	char *src, *dst, *app, *policy_str;
-	
 	src = argv[4];
 	dst = argv[5];
 	dport = (unsigned short)atoi(argv[6]);
 	app = argv[7];
 	policy_str = argv[8];
 
-	char *pattern = "(\\d+)\\.(\\d+)\\.(\\d+)\\.(\\d+)";
-
-	if (validate_ip_string(src, pattern) == 0) {
+	if (validate_ip_string(src) == 0) {
 	    printf("ERROR: '%s' ip is invalid.\n", src);
 	    exit(1);
 	}
 
-	if (validate_ip_string(dst, pattern) == 0) {
+	if (validate_ip_string(dst) == 0) {
 		printf("ERROR: '%s' ip is invalid.\n", dst);
 		exit(1);
 	}
 
-	if (strcmp(policy_str, "ALLOW") == 0) {
-	    policy = ALLOW;
-	} else if (strcmp(policy_str, "DENY") == 0) {
-	    policy = DENY;
-	} else if (strcmp(policy_str, "REJECT") == 0) {
-	    policy = REJECT;
-	} else if (strcmp(policy_str, "ALLOW with IPS") == 0) {
-	   policy = ALLOW_WITH_IPS; 
-	} else {
-	    printf ("%s is an invalid policy.\n", policy_str);
-	    printf("Valid options are: 'ALLOW', 'DENY', 'REJECT', 'ALLOW with IPS'.\n");
-	    exit(1);
-	}
+	policy = set_policy(policy_str);
 
 	rule_set(conn, id, src, dst, dport, app, policy);
 	rules_write(conn);
