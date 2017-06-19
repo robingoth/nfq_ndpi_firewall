@@ -56,9 +56,7 @@ int set_policy(char *policy_str)
     } else if (strcmp(policy_str, "ALLOW with IPS") == 0) {
 	result = ALLOW_WITH_IPS; 
     } else {
-	printf ("%s is an invalid policy.\n", policy_str);
-	printf("Valid options are: 'ALLOW', 'DENY', 'REJECT', 'ALLOW with IPS'.\n");
-	exit(1);
+	result = 0;
     }
 
     return result;
@@ -97,8 +95,7 @@ int main(int argc, char **argv)
 	id = get_rules_num(conn);
 
 	if (id >= MAX_RULES) {
-	    printf("Maximum number of rules has been reached, exiting.\n");
-	    exit(1);
+	    die("Maximum number of rules has been reached, exiting.", conn);
 	}
 		
 	src = argv[3];
@@ -109,15 +106,19 @@ int main(int argc, char **argv)
 
 	if (validate_ip_string(src) == 0) {
 	    printf("ERROR: '%s' ip is invalid.\n", src);
-	    exit(1);
+	    die("Enter a valid IP.", conn);
 	}
 
 	if (validate_ip_string(dst) == 0) {
-		printf("ERROR: '%s' ip is invalid.\n", dst);
-		exit(1);
+	    printf("ERROR: '%s' IP is invalid.\n", dst);
+	    die("Enter a valid IP.", conn);
 	}
 
 	policy = set_policy(policy_str);
+	if (policy == 0) {
+	    printf ("%s is an invalid policy.\n", policy_str);
+	    die("Valid options are: 'ALLOW', 'DENY', 'REJECT', 'ALLOW with IPS'.", conn);
+	}
 
 	rule_set(conn, id, src, dst, dport, app, policy);
 	rules_write(conn);
@@ -126,12 +127,114 @@ int main(int argc, char **argv)
 	    rules_create(conn);
 	    rules_write(conn);
 	    break;
+    case 'd':
+	if (argc != 4) {
+	    die("Need id to delete.", conn);
+	}
+    
+	rule_delete(conn, id);
+	rules_write(conn);
+	break;
     case 'g':
 	if (argc != 4) {
 	    die("Need an id to get.", conn);
 	}
     
 	rule_get(conn, id);
+	break;
+    case 'I':
+	if (argc == 8) {
+	    id = 1;
+	    src = argv[3];
+	    dst = argv[4];
+	    dport = (unsigned short)atoi(argv[5]);
+	    app = argv[6];
+	    policy_str = argv[7];
+	} else if (argc == 9) {
+	    src = argv[4];
+	    dst = argv[5];
+	    dport = (unsigned short)atoi(argv[6]);
+	    app = argv[7];
+	    policy_str = argv[8];
+	} else {
+	    die("Need [id], src, dst, dport, app, policy to insert.", conn);
+	}
+
+	if (validate_ip_string(src) == 0) {
+	    printf("ERROR: '%s' ip is invalid.\n", src);
+	    die("Enter a valid IP.", conn);
+	}
+
+	if (validate_ip_string(dst) == 0) {
+	    printf("ERROR: '%s' IP is invalid.\n", dst);
+	    die("Enter a valid IP.", conn);
+	}
+
+	policy = set_policy(policy_str);
+	if (policy == 0) {
+	    printf ("%s is an invalid policy.\n", policy_str);
+	    die("Valid options are: 'ALLOW', 'DENY', 'REJECT', 'ALLOW with IPS'.", conn);
+	}
+
+	int num_of_rules = get_rules_num(conn);
+	if (num_of_rules >= MAX_RULES) {
+	    die("Maximum number of rules reached.", conn);
+	}
+
+	struct Rules *rules = malloc(sizeof(*rules));
+	int q = 0;
+	for (q = 0; q < MAX_RULES; q++) {
+	    struct Rule rule = { .id = q, .set = 0 };
+	    rules->rules[q] = rule;
+	}
+
+	for (q = 0; q < id - 1; q++) {
+	    rules->rules[q] = conn->rules->rules[q];
+	}
+	
+	for (q = num_of_rules; q >= id; q--) {
+	    rules->rules[q] = conn->rules->rules[q - 1];
+	}
+	
+	struct Rule *new_rule = &rules->rules[id - 1];
+	new_rule->set = 1;
+	
+	// set src
+	char *res = strncpy(new_rule->src, src, strlen(src)); // 16 is the IP address + \0
+	new_rule->src[sizeof(new_rule->src) - 1] = '\0';
+        
+	if (!res) {
+	    die("Source copy failed.", conn);
+        }
+        
+	// set dst
+        res = strncpy(new_rule->dst, dst, strlen(dst));
+        new_rule->dst[sizeof(new_rule->dst) - 1] = '\0';
+        
+	if (!res) {
+	    die("Destination copy failed.", conn);
+        }
+        
+	// set dport
+        new_rule->dport = dport;
+        
+	// set app
+        res = strncpy(new_rule->app, app, MAX_DATA);
+        new_rule->app[sizeof(new_rule->app) - 1] = '\0';
+        
+	if (!res) {
+	    die("Application copy failed.", conn);
+        }
+        
+	//set policy
+        new_rule->policy = policy;
+
+	conn->rules = rules;
+	
+	rules_write(conn);
+	break;
+    case 'l':
+	rules_list(conn);
 	break;
     case 's':
 	if (argc != 9) {
@@ -146,29 +249,22 @@ int main(int argc, char **argv)
 
 	if (validate_ip_string(src) == 0) {
 	    printf("ERROR: '%s' ip is invalid.\n", src);
-	    exit(1);
+	    die("Enter a valid IP.", conn);
 	}
 
 	if (validate_ip_string(dst) == 0) {
-		printf("ERROR: '%s' ip is invalid.\n", dst);
-		exit(1);
+	    printf("ERROR: '%s' ip is invalid.\n", dst);
+	    die("Enter a valid IP.", conn);
 	}
 
 	policy = set_policy(policy_str);
+	if (policy == 0) {
+	    printf ("%s is an invalid policy.\n", policy_str);
+	    die("Valid options are: 'ALLOW', 'DENY', 'REJECT', 'ALLOW with IPS'.", conn);
+	}
 
 	rule_set(conn, id, src, dst, dport, app, policy);
 	rules_write(conn);
-	break;
-    case 'd':
-	if (argc != 4) {
-	    die("Need id to delete.", conn);
-	}
-    
-	rule_delete(conn, id);
-	rules_write(conn);
-	break;
-    case 'l':
-	rules_list(conn);
 	break;
     default:
 	die("Invalid action: c=create, g=get, s=set, d=del, l=list", conn);
