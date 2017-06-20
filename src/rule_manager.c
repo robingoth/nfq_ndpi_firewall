@@ -267,7 +267,7 @@ int main(int argc, char **argv)
 	rules_write(conn);
 	break;
     default:
-	die("Invalid action: c=create, g=get, s=set, d=del, l=list", conn);
+	die("Invalid action: A=append, c=create, d = delete, g=get, I=insert, l=list, s=set", conn);
     }
     
     rules_close(conn);
