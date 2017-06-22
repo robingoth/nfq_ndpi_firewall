@@ -245,3 +245,22 @@ int get_rules_num(struct Connection *conn)
 
     return res;
 }
+
+int set_policy(char *policy_str)
+{
+    int result;
+
+    if (strcmp(policy_str, "ALLOW") == 0) {
+	result = ALLOW;
+    } else if (strcmp(policy_str, "DENY") == 0) {
+	result = DENY;
+    } else if (strcmp(policy_str, "REJECT") == 0) {
+	result = REJECT;
+    } else if (strcmp(policy_str, "ALLOW with IPS") == 0) {
+	result = ALLOW_WITH_IPS;
+    } else {
+	result = 0;
+    }
+
+    return result;
+}
