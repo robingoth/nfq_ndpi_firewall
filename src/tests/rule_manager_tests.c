@@ -9,10 +9,15 @@
 #include "rule_helper.h"
 
 /* Wrap functions */
+FILE *__wrap_fopen(char *filename)
+{
+    return mock_type(FILE *);
+}
 
-
-
-
+int __wrap_fread(void *ptr, size_t size, size_t nmemb, FILE *stream)
+{
+    return mock_type(int);
+}
 
 /********************/
 
@@ -425,6 +430,81 @@ static void rule_set_test_success(void **state)
     free(conn);
 }
 
+static void rules_create_test(void **state)
+{
+    (void) state; /* unused */
+
+    struct Connection *expected_conn = malloc(sizeof(struct Connection));
+    struct Connection *actual_conn = malloc(sizeof(struct Connection));
+    if (!expected_conn || !actual_conn) {
+	printf("Memory error.\n");
+	exit(1);
+    }
+    
+    expected_conn->rules = malloc(sizeof(struct Rules));
+    actual_conn->rules = malloc(sizeof(struct Rules));
+    if (!expected_conn->rules || !actual_conn) {
+	printf("Memory error.\n");
+	exit(1);
+    }
+    
+    int i = 0;
+    for (i = 0; i < MAX_RULES; i++) {
+	struct Rule rule = { .id = i, .set = 0 };
+	expected_conn->rules->rules[i] = rule;
+    }
+
+    rules_create(actual_conn);
+
+    assert_memory_equal(expected_conn->rules, actual_conn->rules, sizeof(struct Rules));
+    
+    cleanup(expected_conn);
+    cleanup(actual_conn);
+
+    free(expected_conn->rules);
+    free(expected_conn);
+    free(actual_conn->rules);
+    free(actual_conn);
+}
+
+static void rules_open_test_read(void **state)
+{
+    (void) state; /* unused */
+
+    FILE *file = malloc(sizeof(*file));
+    will_return(__wrap_fopen, file);
+    will_return(__wrap_fread, 1);
+
+    struct Connection *conn = rules_open("file", 'j');
+    assert_non_null(conn);
+    assert_non_null(conn->rules);
+    assert_non_null(conn->file);
+
+    free(file);
+    cleanup(conn);
+    free(conn->file);
+    free(conn->rules);
+    free(conn);
+}
+
+static void rules_open_test_create(void **state)
+{
+    (void) state; /* unused */
+
+    FILE *file = malloc(sizeof(*file));
+    will_return(__wrap_fopen, file);
+
+    struct Connection *conn = rules_open("file", 'c');
+    assert_non_null(conn);
+    assert_non_null(conn->rules);
+    assert_non_null(conn->file);
+
+    free(file);
+    cleanup(conn);
+    free(conn->file);
+    free(conn->rules);
+    free(conn);
+}
 
 int main(void) {
     const struct CMUnitTest tests[] = {
@@ -443,7 +523,10 @@ int main(void) {
     cmocka_unit_test(rule_delete_test),
     cmocka_unit_test(rules_get_test_success),
     cmocka_unit_test(rules_get_test_fail),
-    cmocka_unit_test(rule_set_test_success)
+    cmocka_unit_test(rule_set_test_success),
+    cmocka_unit_test(rules_create_test),
+    cmocka_unit_test(rules_open_test_read),
+    cmocka_unit_test(rules_open_test_create)
     };
 
     return cmocka_run_group_tests(tests, NULL, NULL);

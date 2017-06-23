@@ -19,7 +19,7 @@ CFLAGS= -Wall -g -I$(INCDIR) -I$(NDPIDIR)/src/include $(LIBSDIR)/nDPI/lib/libndp
 CFLAGS2 = -Wall -g -I$(INCDIR) -L/usr/local/lib 
 
 CTESTS_FLAGS = -g -Wall -I$(INCDIR)
-RM_WRAPS = -Wl,--wrap=func
+RM_WRAPS = -Wl,--wrap=fopen,--wrap=fread
 
 LIBS = -lndpi -lnetfilter_queue
 TESTLIBS = -lcmocka
@@ -37,12 +37,13 @@ OBJS = $(patsubst %, $(OBJDIR)/%, $(_OBJS))
 OBJS2 = $(patsubst %, $(OBJDIR)/%, $(_OBJS2))
 OBJSTEST = $(patsubst %, $(OBJDIR)/%, $(_OBJSTEST))
 
-
 $(OBJDIR)/%.o: %.c $(DEPS)
 	$(CC) -c -o $@ $< $(CFLAGS)
 
 $(OBJDIR)/%.o: $(TESTSDIR)/%.c $(DEPS)
 	$(CC) -c -o $@ $< $(CTESTS_FLAGS) 
+
+all: $(PROGRAMNAME) $(PROGRAMNAME2) $(RM_TESTS)
 
 $(PROGRAMNAME): $(OBJS) 
 	$(CC) -o $@ $^ $(CFLAGS) $(LIBS)
