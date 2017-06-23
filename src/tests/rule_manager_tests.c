@@ -4,6 +4,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <cmocka.h>
+#include <string.h>
 
 #include "rule_helper.h"
 
@@ -14,6 +15,23 @@
 
 
 /********************/
+
+/*
+ * Cleanup function. Sets values of dynamically allocated struct to NULL
+ */
+void cleanup(struct Connection *conn) {
+    if (conn) {
+	if (conn->file) {
+	    conn->file = NULL;
+	}
+
+	if (conn->rules) {
+	    conn->rules = NULL;
+	}
+
+	conn = NULL;
+    }
+}
 
 /* Tests */
 static void set_policy_test_allow(void **state)
@@ -81,8 +99,7 @@ static void get_rules_num_test(void **state)
     (void) state; /* unused */
     int actual, expected;
     expected = 5;
-
-
+    
     struct Connection *conn = malloc(sizeof(struct Connection));
 
     if (!conn) {
@@ -112,8 +129,302 @@ static void get_rules_num_test(void **state)
 
     actual = get_rules_num(conn);
 
+    cleanup(conn);
+
+    free(conn->rules);
+    free(conn);
+
     assert_int_equal(actual, expected);
 }
+
+static void is_match_test_success(void **state)
+{
+    (void) state; /* unused */
+    int expected, actual;
+    char *src, *dst, *app;
+    unsigned short dport;
+    
+    expected = 1;
+    src = "127.0.0.1";
+    dst = "8.8.8.8";
+    dport = 666;
+    app = "Facebook";
+
+    struct Rule *rule = malloc(sizeof(*rule));
+    rule->id = 0;
+    rule->set = 1;
+    strcpy(rule->src, src);
+    strcpy(rule->dst, dst);
+    strcpy(rule->app, app);
+    rule->dport = dport;
+    rule->policy = ALLOW;
+
+    actual = is_match(rule, src, dst, dport, app, app);
+    free(rule);
+
+    assert_int_equal(actual, expected);
+}
+static void is_match_test_src_no_match(void **state)
+{
+    (void) state; /* unused */
+    int expected, actual;
+    char *src, *dst, *app;
+    unsigned short dport;
+    
+    expected = 0;
+    src = "127.0.0.1";
+    dst = "8.8.8.8";
+    dport = 666;
+    app = "Facebook";
+
+    struct Rule *rule = malloc(sizeof(*rule));
+    rule->id = 0;
+    rule->set = 1;
+    strcpy(rule->src, "192.168.0.1");
+    strcpy(rule->dst, dst);
+    strcpy(rule->app, app);
+    rule->dport = dport;
+    rule->policy = ALLOW;
+
+    actual = is_match(rule, src, dst, dport, app, app);
+    free(rule);
+    
+    assert_int_equal(actual, expected);
+}
+
+static void is_match_test_dst_no_match(void **state)
+{
+    (void) state; /* unused */
+    int expected, actual;
+    char *src, *dst, *app;
+    unsigned short dport;
+    
+    expected = 0;
+    src = "127.0.0.1";
+    dst = "8.8.8.8";
+    dport = 666;
+    app = "Facebook";
+
+    struct Rule *rule = malloc(sizeof(*rule));
+    rule->id = 0;
+    rule->set = 1;
+    strcpy(rule->src, src);
+    strcpy(rule->dst, "10.10.10.10");
+    strcpy(rule->app, app);
+    rule->dport = dport;
+    rule->policy = ALLOW;
+
+    actual = is_match(rule, src, dst, dport, app, app);
+    free(rule);
+    
+    assert_int_equal(actual, expected);
+}
+
+static void is_match_test_dport_no_match(void **state)
+{
+    (void) state; /* unused */
+    int expected, actual;
+    char *src, *dst, *app;
+    unsigned short dport;
+    
+    expected = 0;
+    src = "127.0.0.1";
+    dst = "8.8.8.8";
+    dport = 666;
+    app = "Facebook";
+
+    struct Rule *rule = malloc(sizeof(*rule));
+    rule->id = 0;
+    rule->set = 1;
+    strcpy(rule->src, src);
+    strcpy(rule->dst, dst);
+    strcpy(rule->app, app);
+    rule->dport = 999;
+    rule->policy = ALLOW;
+
+    actual = is_match(rule, src, dst, dport, app, app);
+    free(rule);
+    
+    assert_int_equal(actual, expected);
+}
+
+static void is_match_test_app_no_match(void **state)
+{
+    (void) state; /* unused */
+    int expected, actual;
+    char *src, *dst, *app;
+    unsigned short dport;
+    
+    expected = 0;
+    src = "127.0.0.1";
+    dst = "8.8.8.8";
+    dport = 666;
+    app = "Facebook";
+
+    struct Rule *rule = malloc(sizeof(*rule));
+    rule->id = 0;
+    rule->set = 1;
+    strcpy(rule->src, src);
+    strcpy(rule->dst, dst);
+    strcpy(rule->app, "Youtube");
+    rule->dport = dport;
+    rule->policy = ALLOW;
+
+    actual = is_match(rule, src, dst, dport, "HTTP", app);
+    free(rule);
+    
+    assert_int_equal(actual, expected);
+}
+
+static void is_match_test_all_any(void **state)
+{
+    (void) state; /* unused */
+    int expected, actual;
+    char *src, *dst, *app;
+    unsigned short dport;
+    
+    expected = 1;
+    src = "127.0.0.1";
+    dst = "8.8.8.8";
+    dport = 666;
+    app = "Facebook";
+
+    struct Rule *rule = malloc(sizeof(*rule));
+    rule->id = 0;
+    rule->set = 1;
+    strcpy(rule->src, "any");
+    strcpy(rule->dst, "any");
+    strcpy(rule->app, "any");
+    rule->dport = 0;
+    rule->policy = ALLOW;
+
+    actual = is_match(rule, src, dst, dport, app, app);
+    free(rule);
+    
+    assert_int_equal(actual, expected);
+}
+
+static void rule_delete_test(void **state)
+{
+    (void) state; /* unused */
+
+    struct Connection *conn = malloc(sizeof(struct Connection));
+
+    if (!conn) {
+	printf("Memory error.\n");
+	exit(1);
+    }
+
+    conn->rules = malloc(sizeof(struct Rules));
+
+    if (!conn->rules) {
+	printf("Memory error.\n");
+	exit(1);
+    }
+
+    struct Rule expected_rule = { .id = 0, .set = 0 };
+    struct Rule rule = { .id = 0, .set = 1 };
+
+    conn->rules->rules[0] = rule;
+    rule_delete(conn, 0);
+    
+    struct Rule actual_rule = conn->rules->rules[0];
+
+    int expected = expected_rule.set;
+    int actual = actual_rule.set;
+
+    cleanup(conn);
+    free(conn->rules);
+    free(conn);
+    
+    assert_int_equal(actual, expected);
+}
+
+static void rules_get_test_success(void **state)
+{
+    (void) state; /* unused */
+
+    struct Connection *conn = malloc(sizeof(struct Connection));
+
+    if (!conn) {
+	printf("Memory error.\n");
+	exit(1);
+    }
+
+    conn->rules = malloc(sizeof(struct Rules));
+
+    if (!conn->rules) {
+	printf("Memory error.\n");
+	exit(1);
+    }
+
+    struct Rules *actual = rules_get(conn);
+
+    assert_non_null(actual);
+    
+    cleanup(conn);
+    free(conn->rules);
+    free(conn);
+}
+
+static void rules_get_test_fail(void **state)
+{
+    (void) state; /* unused */
+
+    struct Connection *conn = malloc(sizeof(struct Connection));
+
+    if (!conn) {
+	printf("Memory error.\n");
+	exit(1);
+    }
+
+    struct Rules *actual = rules_get(conn);
+
+    assert_null(actual);
+
+    cleanup(conn);
+    free(conn);
+}
+
+static void rule_set_test_success(void **state)
+{
+    (void) state; /* unused */
+
+    struct Connection *conn = malloc(sizeof(struct Connection));
+    if (!conn) {
+	printf("Memory error.\n");
+	exit(1);
+    }
+    
+    conn->rules = malloc(sizeof(struct Rules));
+    if (!conn->rules) {
+	printf("Memory error.\n");
+	exit(1);
+    }
+
+    // set expected values
+    struct Rule *expected_rule = malloc(sizeof(*expected_rule));
+    expected_rule->id = 0;
+    expected_rule->set = 1;
+    strcpy(expected_rule->src, "any");
+    strcpy(expected_rule->dst, "any");
+    strcpy(expected_rule->app, "any");
+    expected_rule->dport = 100;
+    expected_rule->policy = ALLOW;
+
+    rule_set(conn, 0, "any", "any", 100, "any", ALLOW);
+
+    // retrieve actual values
+    struct Rule *actual_rule = &conn->rules->rules[0];
+
+    assert_memory_equal(expected_rule, actual_rule, sizeof(struct Rule));
+    
+    cleanup(conn);
+    free(expected_rule);
+    free(conn->rules);
+    free(conn);
+}
+
 
 int main(void) {
     const struct CMUnitTest tests[] = {
@@ -122,7 +433,17 @@ int main(void) {
     cmocka_unit_test(set_policy_test_reject),
     cmocka_unit_test(set_policy_test_allow_ips),
     cmocka_unit_test(set_policy_test_invalid),
-    cmocka_unit_test(get_rules_num_test)
+    cmocka_unit_test(get_rules_num_test),
+    cmocka_unit_test(is_match_test_all_any),
+    cmocka_unit_test(is_match_test_app_no_match),
+    cmocka_unit_test(is_match_test_dport_no_match),
+    cmocka_unit_test(is_match_test_dst_no_match),
+    cmocka_unit_test(is_match_test_src_no_match),
+    cmocka_unit_test(is_match_test_success),
+    cmocka_unit_test(rule_delete_test),
+    cmocka_unit_test(rules_get_test_success),
+    cmocka_unit_test(rules_get_test_fail),
+    cmocka_unit_test(rule_set_test_success)
     };
 
     return cmocka_run_group_tests(tests, NULL, NULL);
