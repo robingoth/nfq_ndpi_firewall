@@ -1,7 +1,8 @@
 *.swp
 RuleManager
 NdpiNfqueueFirewall
-RuleManagerTests
+RuleHelperTests
+NdpiHelperTests
 rules.db
 
 
