@@ -21,7 +21,7 @@ void die(const char *message, struct Connection *conn)
     exit(1);
 }
 
-void rule_print(struct Rule *rule)
+void rule_print(struct Rule *rule, int id)
 {
     char *policy;
     switch (rule->policy) {
@@ -42,7 +42,7 @@ void rule_print(struct Rule *rule)
 	    exit(1);
     }
 
-    printf("%s %s:%d %s '%s'\n", rule->src, rule->dst, rule->dport, rule->app, policy);
+    printf("%d -> %s %s:%d %s '%s'\n", id, rule->src, rule->dst, rule->dport, rule->app, policy);
 }
 
 void rules_load(struct Connection *conn) 
@@ -121,7 +121,7 @@ void rules_create(struct Connection *conn)
 {
     int i = 0;
     for (i = 0; i < MAX_RULES; i++) {
-	struct Rule rule = { .id = i, .set = 0 };
+	struct Rule rule = { .set = 0 };
 	conn->rules->rules[i] = rule;
     }
 }
@@ -173,7 +173,7 @@ void rule_get(struct Connection *conn, int id)
     struct Rule *rule = &conn->rules->rules[id];
 
     if (rule->set) {
-	rule_print(rule);
+	rule_print(rule, id);
     } else {
 	die("ID not set.", conn);
     }
@@ -192,8 +192,23 @@ struct Rules *rules_get(struct Connection *conn)
 
 void rule_delete(struct Connection *conn, int id) 
 {
-    struct Rule rule = { .id = id, .set = 0  };
-    conn->rules->rules[id] = rule;
+    // create temporary storage for rules
+    struct Rules *new_rules = malloc(sizeof(*new_rules));
+    int i = 0;
+    for (i = 0; i < MAX_RULES; i++) {
+	struct Rule rule = { .set = 0 };
+	new_rules->rules[i] = rule;
+    }
+
+    for (i = 0; i < id; i++) {
+	new_rules->rules[i] = conn->rules->rules[i];
+    }
+
+    for (i = id; i < MAX_RULES - 1; i++) {
+	new_rules->rules[i] = conn->rules->rules[i + 1];
+    }
+
+    conn->rules = new_rules;
 }
 
 void rules_list(struct Connection *conn)
@@ -205,7 +220,7 @@ void rules_list(struct Connection *conn)
 	struct Rule *cur = &rules->rules[i];
 
 	if (cur->set) {
-	    rule_print(cur);
+	    rule_print(cur, i);
 	}
     }
 }

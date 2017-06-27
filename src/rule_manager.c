@@ -125,7 +125,7 @@ int main(int argc, char **argv)
 	break;
     case 'I':
 	if (argc == 8) {
-	    id = 1;
+	    id = 0;
 	    src = argv[3];
 	    dst = argv[4];
 	    dport = (unsigned short)atoi(argv[5]);
@@ -162,53 +162,56 @@ int main(int argc, char **argv)
 	    die("Maximum number of rules reached.", conn);
 	}
 
+	// create temporary storage for rules
 	struct Rules *rules = malloc(sizeof(*rules));
 	int q = 0;
 	for (q = 0; q < MAX_RULES; q++) {
-	    struct Rule rule = { .id = q, .set = 0 };
+	    struct Rule rule = { .set = 0 };
 	    rules->rules[q] = rule;
 	}
 
-	for (q = 0; q < id - 1; q++) {
+	// copy rules before id as is
+	for (q = 0; q < id; q++) {
 	    rules->rules[q] = conn->rules->rules[q];
 	}
 	
-	for (q = num_of_rules; q >= id; q--) {
+	// copy rules after id with updated ids
+	for (q = num_of_rules; q > id; q--) {
 	    rules->rules[q] = conn->rules->rules[q - 1];
 	}
 	
-	struct Rule *new_rule = &rules->rules[id - 1];
-	new_rule->set = 1;
+	// copy new rule
+	rules->rules[id].set = 1;
 	
 	// set src
-	char *res = strncpy(new_rule->src, src, strlen(src)); // 16 is the IP address + \0
-	new_rule->src[sizeof(new_rule->src) - 1] = '\0';
+	char *res = strncpy(rules->rules[id].src, src, strlen(src)); // 16 is the IP address + \0
+	rules->rules[id].src[sizeof(rules->rules[id].src) - 1] = '\0';
         
 	if (!res) {
 	    die("Source copy failed.", conn);
         }
         
 	// set dst
-        res = strncpy(new_rule->dst, dst, strlen(dst));
-        new_rule->dst[sizeof(new_rule->dst) - 1] = '\0';
+        res = strncpy(rules->rules[id].dst, dst, strlen(dst));
+        rules->rules[id].dst[sizeof(rules->rules[id].dst) - 1] = '\0';
         
 	if (!res) {
 	    die("Destination copy failed.", conn);
         }
         
 	// set dport
-        new_rule->dport = dport;
+        rules->rules[id].dport = dport;
         
 	// set app
-        res = strncpy(new_rule->app, app, MAX_DATA);
-        new_rule->app[sizeof(new_rule->app) - 1] = '\0';
+        res = strncpy(rules->rules[id].app, app, MAX_DATA);
+        rules->rules[id].app[sizeof(rules->rules[id].app) - 1] = '\0';
         
 	if (!res) {
 	    die("Application copy failed.", conn);
         }
         
 	//set policy
-        new_rule->policy = policy;
+        rules->rules[id].policy = policy;
 
 	conn->rules = rules;
 	

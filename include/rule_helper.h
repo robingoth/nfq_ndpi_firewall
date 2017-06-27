@@ -9,7 +9,6 @@
 
 // Structs
 struct Rule {
-    int id;
     int set;
     char src[16];
     char dst[16];
@@ -29,7 +28,7 @@ struct Connection {
 
 void die(const char *message, struct Connection *conn);
 
-void rule_print(struct Rule *rule);
+void rule_print(struct Rule *rule, int id);
 
 void rules_load(struct Connection *conn);
 

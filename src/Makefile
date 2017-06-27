@@ -47,7 +47,7 @@ $(OBJDIR)/%.o: %.c $(DEPS)
 $(OBJDIR)/%.o: $(TESTSDIR)/%.c $(DEPS)
 	$(CC) -c -o $@ $< $(TESTS_CFLAGS)  
 
-all: $(PROGRAMNAME) $(PROGRAMNAME2) $(RM_TESTS) $(NH_TESTS)
+all: $(PROGRAMNAME) $(PROGRAMNAME2) 
 
 $(PROGRAMNAME): $(OBJS) 
 	$(CC) -o $@ $^ $(CFLAGS) $(LIBS)

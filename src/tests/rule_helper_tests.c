@@ -122,7 +122,6 @@ static void get_rules_num_test(void **state)
     int i = 0;
     for (i = 0; i < MAX_RULES; i++) {
 	struct Rule rule;
-	rule.id = i;
 	if (i < expected) {
 	    rule.set = 1;
 	} else {
@@ -156,7 +155,6 @@ static void is_match_test_success(void **state)
     app = "Facebook";
 
     struct Rule *rule = malloc(sizeof(*rule));
-    rule->id = 0;
     rule->set = 1;
     strcpy(rule->src, src);
     strcpy(rule->dst, dst);
@@ -183,7 +181,6 @@ static void is_match_test_src_no_match(void **state)
     app = "Facebook";
 
     struct Rule *rule = malloc(sizeof(*rule));
-    rule->id = 0;
     rule->set = 1;
     strcpy(rule->src, "192.168.0.1");
     strcpy(rule->dst, dst);
@@ -211,7 +208,6 @@ static void is_match_test_dst_no_match(void **state)
     app = "Facebook";
 
     struct Rule *rule = malloc(sizeof(*rule));
-    rule->id = 0;
     rule->set = 1;
     strcpy(rule->src, src);
     strcpy(rule->dst, "10.10.10.10");
@@ -239,7 +235,6 @@ static void is_match_test_dport_no_match(void **state)
     app = "Facebook";
 
     struct Rule *rule = malloc(sizeof(*rule));
-    rule->id = 0;
     rule->set = 1;
     strcpy(rule->src, src);
     strcpy(rule->dst, dst);
@@ -267,7 +262,6 @@ static void is_match_test_app_no_match(void **state)
     app = "Facebook";
 
     struct Rule *rule = malloc(sizeof(*rule));
-    rule->id = 0;
     rule->set = 1;
     strcpy(rule->src, src);
     strcpy(rule->dst, dst);
@@ -295,7 +289,6 @@ static void is_match_test_all_any(void **state)
     app = "Facebook";
 
     struct Rule *rule = malloc(sizeof(*rule));
-    rule->id = 0;
     rule->set = 1;
     strcpy(rule->src, "any");
     strcpy(rule->dst, "any");
@@ -327,8 +320,8 @@ static void rule_delete_test(void **state)
 	exit(1);
     }
 
-    struct Rule expected_rule = { .id = 0, .set = 0 };
-    struct Rule rule = { .id = 0, .set = 1 };
+    struct Rule expected_rule = { .set = 0 };
+    struct Rule rule = { .set = 1 };
 
     conn->rules->rules[0] = rule;
     rule_delete(conn, 0);
@@ -409,7 +402,6 @@ static void rule_set_test_success(void **state)
 
     // set expected values
     struct Rule *expected_rule = malloc(sizeof(*expected_rule));
-    expected_rule->id = 0;
     expected_rule->set = 1;
     strcpy(expected_rule->src, "any");
     strcpy(expected_rule->dst, "any");
@@ -450,7 +442,7 @@ static void rules_create_test(void **state)
     
     int i = 0;
     for (i = 0; i < MAX_RULES; i++) {
-	struct Rule rule = { .id = i, .set = 0 };
+	struct Rule rule = { .set = 0 };
 	expected_conn->rules->rules[i] = rule;
     }
 

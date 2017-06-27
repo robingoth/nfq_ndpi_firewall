@@ -152,7 +152,7 @@ static int cb(struct nfq_q_handle *qh, struct nfgenmsg *nfmsg,
     char *src = inet_ntoa(*((struct in_addr *)&(ip_info->saddr)));
     char *dst = inet_ntoa(*((struct in_addr *)&(ip_info->daddr)));
 
-    u_int32_t verdict;
+    u_int32_t verdict = NF_ACCEPT;
     
     int i = 0;
     for (i = 0; i < RuleCounter; i++) {
@@ -162,16 +162,20 @@ static int cb(struct nfq_q_handle *qh, struct nfgenmsg *nfmsg,
 	    switch (cur->policy) {
 		case ALLOW:
 		    verdict = NF_ACCEPT;
+		    AllowedPackets++;
 		    break;
 		case DENY:
 		    verdict = NF_DROP;
+		    BlockedPackets++;
 		    break;
 		case REJECT:
 		    // TODO implement reject
 		    verdict = NF_DROP;
+		    BlockedPackets++;
 		    break;
 		case ALLOW_WITH_IPS:
 		    verdict = (1 << 16) | NF_QUEUE;
+		    AllowedPackets++;
 		    break;
 		default:
 		    printf("ERROR: Policy is invalid.\n");
@@ -179,8 +183,6 @@ static int cb(struct nfq_q_handle *qh, struct nfgenmsg *nfmsg,
 	    }
 	    // exit the loop in case of match
 	    break;
-	} else {
-	    verdict = NF_ACCEPT;
 	}
     }
     
@@ -272,7 +274,7 @@ void update_rules(char *filepath)
     	for (i = 0; i < MAX_RULES; i++) {
     	    struct Rule *cur = &RulesList->rules[i];
     	    if (cur->set == 1) {
-    	        rule_print(cur);
+    	        rule_print(cur, i);
     	    }
     	}
 	printf("\n");
