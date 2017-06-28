@@ -1,5 +1,6 @@
 #include <assert.h>
 #include <errno.h>
+#include <pcre.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -42,7 +43,8 @@ void rule_print(struct Rule *rule, int id)
 	    exit(1);
     }
 
-    printf("%d -> %s %s:%d %s '%s'\n", id, rule->src, rule->dst, rule->dport, rule->app, policy);
+    printf("%d -> %s %s:%d %s.%s '%s'\n", id, rule->src, rule->dst, rule->dport, 
+	    rule->master_proto, rule->app_proto, policy);
 }
 
 void rules_load(struct Connection *conn) 
@@ -127,7 +129,8 @@ void rules_create(struct Connection *conn)
 }
 
 void rule_set(struct Connection *conn, int id, const char *src, 
-		const char *dst, const unsigned short dport, const char *app, const int policy)
+		const char *dst, const unsigned short dport, const char *master_proto, 
+		const char *app_proto, const int policy)
 {
     struct Rule *rule = &conn->rules->rules[id];
         
@@ -156,9 +159,13 @@ void rule_set(struct Connection *conn, int id, const char *src,
     // set dport
     rule->dport = dport;
     
-    // set app
-    res = strncpy(rule->app, app, MAX_DATA);
-    rule->app[sizeof(rule->app) - 1] = '\0';
+    // set master_proto
+    res = strncpy(rule->master_proto, master_proto, MAX_DATA);
+    rule->master_proto[sizeof(rule->master_proto) - 1] = '\0';
+
+    // set app_proto
+    res = strncpy(rule->app_proto, app_proto, MAX_DATA);
+    rule->app_proto[sizeof(rule->app_proto) - 1] = '\0';
 
     if (!res) {
 	die("Application copy failed.", conn);
@@ -234,10 +241,11 @@ int is_match(struct Rule *rule, char *src, char *dst, unsigned short dport,
     if ((strcmp(rule->src, src) == 0) || (strcmp(rule->src, any) == 0)) {
 	if ((strcmp(rule->dst, dst) == 0) || (strcmp(rule->dst, any) == 0)) {
 	    if ((rule->dport == dport) || (rule->dport == 0)) {
-		if ((strcmp(master_proto, rule->app) == 0) || 
-			(strcmp(app_proto, rule->app) == 0) || 
-			(strcmp(rule->app, any) == 0)) {
-		    ret = 1;
+		if ((strcmp(rule->master_proto, master_proto) == 0) || 
+			    (strcmp(rule->master_proto, any) == 0)) {
+		    if ((strcmp(rule->app_proto, app_proto) == 0) || (strcmp(rule->app_proto, any) == 0)) {
+			ret = 1;
+		    }	
 		}
 	    }
 	}
@@ -278,4 +286,67 @@ int set_policy(char *policy_str)
     }
 
     return result;
+}
+
+const char **parse_string(char *string, char *pattern, int debug)
+{
+    int ovector_len = 30;
+
+    pcre *re;
+    const char *error;
+    int erroffset;
+    int ovector[ovector_len];
+    int rc;
+    const char *subString;
+
+    re = pcre_compile(pattern, 0, &error, &erroffset, NULL);
+
+    if (re == NULL) {
+	printf("ERROR: compilation failed at offset %d: '%s'\n", erroffset, error);
+	return NULL;
+    }
+
+    rc = pcre_exec(re, NULL, string, strlen(string), 0, 0, ovector, ovector_len);
+
+    if (rc < 0) {
+	switch (rc) {
+	    case PCRE_ERROR_NOMATCH:
+		if (debug == 1) {
+		    printf("%s did not match.\n", string);
+		}
+		break;
+	    case PCRE_ERROR_NULL:
+		printf("ERROR: Something was null.\n");
+		break;
+	    case PCRE_ERROR_BADOPTION:
+		printf("ERROR: A bad option was passed.\n");
+		break;
+	    case PCRE_ERROR_BADMAGIC:
+		printf("ERROR: Magic number was bad.\n");
+		break;
+	    case PCRE_ERROR_UNKNOWN_NODE:
+		printf("ERROR: Something kooky in the compiled re.\n");
+		break;
+	    case PCRE_ERROR_NOMEMORY:
+		printf("ERROR: Ran out of memory.\n");
+		break;
+	    default:
+		printf("ERROR: Unknown error.\n");
+	}
+
+	pcre_free(re);
+	return NULL;
+    } else {
+	const char **res = malloc(rc * sizeof(const char *));
+	int i = 0;
+	for (i = 0; i < rc; i++) {
+	    res[i] = malloc(MAX_DATA * sizeof(const char));
+	}
+
+	for (i = 0; i < rc; i++) {
+	    pcre_get_substring(string, ovector, rc, i, &(subString));
+	    res[i] = subString;
+	}
+	return res;
+    }
 }

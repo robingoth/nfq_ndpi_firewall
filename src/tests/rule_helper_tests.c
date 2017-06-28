@@ -145,24 +145,26 @@ static void is_match_test_success(void **state)
 {
     (void) state; /* unused */
     int expected, actual;
-    char *src, *dst, *app;
+    char *src, *dst, *master_proto, *app_proto;
     unsigned short dport;
     
     expected = 1;
     src = "127.0.0.1";
     dst = "8.8.8.8";
     dport = 666;
-    app = "Facebook";
+    master_proto = "HTTPS";
+    app_proto = "Facebook";
 
     struct Rule *rule = malloc(sizeof(*rule));
     rule->set = 1;
     strcpy(rule->src, src);
     strcpy(rule->dst, dst);
-    strcpy(rule->app, app);
+    strcpy(rule->master_proto, master_proto);
+    strcpy(rule->app_proto, app_proto);
     rule->dport = dport;
     rule->policy = ALLOW;
 
-    actual = is_match(rule, src, dst, dport, app, app);
+    actual = is_match(rule, src, dst, dport, master_proto, app_proto);
     free(rule);
 
     assert_int_equal(actual, expected);
@@ -171,24 +173,26 @@ static void is_match_test_src_no_match(void **state)
 {
     (void) state; /* unused */
     int expected, actual;
-    char *src, *dst, *app;
+    char *src, *dst, *master_proto, *app_proto;
     unsigned short dport;
     
     expected = 0;
     src = "127.0.0.1";
     dst = "8.8.8.8";
     dport = 666;
-    app = "Facebook";
+    master_proto = "HTTPS";
+    app_proto = "Facebook";
 
     struct Rule *rule = malloc(sizeof(*rule));
     rule->set = 1;
     strcpy(rule->src, "192.168.0.1");
     strcpy(rule->dst, dst);
-    strcpy(rule->app, app);
+    strcpy(rule->master_proto, master_proto);
+    strcpy(rule->app_proto, app_proto);
     rule->dport = dport;
     rule->policy = ALLOW;
 
-    actual = is_match(rule, src, dst, dport, app, app);
+    actual = is_match(rule, src, dst, dport, master_proto, app_proto);
     free(rule);
     
     assert_int_equal(actual, expected);
@@ -198,24 +202,26 @@ static void is_match_test_dst_no_match(void **state)
 {
     (void) state; /* unused */
     int expected, actual;
-    char *src, *dst, *app;
+    char *src, *dst, *master_proto, *app_proto;
     unsigned short dport;
     
     expected = 0;
     src = "127.0.0.1";
     dst = "8.8.8.8";
     dport = 666;
-    app = "Facebook";
+    master_proto = "HTTPS";
+    app_proto = "Facebook";
 
     struct Rule *rule = malloc(sizeof(*rule));
     rule->set = 1;
     strcpy(rule->src, src);
     strcpy(rule->dst, "10.10.10.10");
-    strcpy(rule->app, app);
+    strcpy(rule->master_proto, master_proto);
+    strcpy(rule->app_proto, app_proto);
     rule->dport = dport;
     rule->policy = ALLOW;
 
-    actual = is_match(rule, src, dst, dport, app, app);
+    actual = is_match(rule, src, dst, dport, master_proto, app_proto);
     free(rule);
     
     assert_int_equal(actual, expected);
@@ -225,51 +231,55 @@ static void is_match_test_dport_no_match(void **state)
 {
     (void) state; /* unused */
     int expected, actual;
-    char *src, *dst, *app;
+    char *src, *dst, *master_proto, *app_proto;
     unsigned short dport;
     
     expected = 0;
     src = "127.0.0.1";
     dst = "8.8.8.8";
     dport = 666;
-    app = "Facebook";
+    master_proto = "HTTPS";
+    app_proto = "Facebook";
 
     struct Rule *rule = malloc(sizeof(*rule));
     rule->set = 1;
     strcpy(rule->src, src);
     strcpy(rule->dst, dst);
-    strcpy(rule->app, app);
+    strcpy(rule->master_proto, master_proto);
+    strcpy(rule->app_proto, app_proto);
     rule->dport = 999;
     rule->policy = ALLOW;
 
-    actual = is_match(rule, src, dst, dport, app, app);
+    actual = is_match(rule, src, dst, dport, master_proto, app_proto);
     free(rule);
     
     assert_int_equal(actual, expected);
 }
 
-static void is_match_test_app_no_match(void **state)
+static void is_match_test_app_proto_no_match(void **state)
 {
     (void) state; /* unused */
     int expected, actual;
-    char *src, *dst, *app;
+    char *src, *dst, *master_proto, *app_proto;
     unsigned short dport;
     
     expected = 0;
     src = "127.0.0.1";
     dst = "8.8.8.8";
     dport = 666;
-    app = "Facebook";
+    master_proto = "HTTPS";
+    app_proto = "Facebook";
 
     struct Rule *rule = malloc(sizeof(*rule));
     rule->set = 1;
     strcpy(rule->src, src);
     strcpy(rule->dst, dst);
-    strcpy(rule->app, "Youtube");
+    strcpy(rule->master_proto, master_proto);
+    strcpy(rule->app_proto, "Google");
     rule->dport = dport;
     rule->policy = ALLOW;
 
-    actual = is_match(rule, src, dst, dport, "HTTP", app);
+    actual = is_match(rule, src, dst, dport, master_proto, app_proto);
     free(rule);
     
     assert_int_equal(actual, expected);
@@ -279,24 +289,55 @@ static void is_match_test_all_any(void **state)
 {
     (void) state; /* unused */
     int expected, actual;
-    char *src, *dst, *app;
+    char *src, *dst, *master_proto, *app_proto;
     unsigned short dport;
     
     expected = 1;
     src = "127.0.0.1";
     dst = "8.8.8.8";
     dport = 666;
-    app = "Facebook";
+    master_proto = "HTTPS";
+    app_proto = "Facebook";
 
     struct Rule *rule = malloc(sizeof(*rule));
     rule->set = 1;
     strcpy(rule->src, "any");
     strcpy(rule->dst, "any");
-    strcpy(rule->app, "any");
+    strcpy(rule->master_proto, "any");
+    strcpy(rule->app_proto, "any");
     rule->dport = 0;
     rule->policy = ALLOW;
 
-    actual = is_match(rule, src, dst, dport, app, app);
+    actual = is_match(rule, src, dst, dport, master_proto, app_proto);
+    free(rule);
+    
+    assert_int_equal(actual, expected);
+}
+
+static void is_match_test_master_proto_no_match(void **state)
+{
+    (void) state; /* unused */
+    int expected, actual;
+    char *src, *dst, *master_proto, *app_proto;
+    unsigned short dport;
+    
+    expected = 0;
+    src = "127.0.0.1";
+    dst = "8.8.8.8";
+    dport = 666;
+    master_proto = "HTTPS";
+    app_proto = "Facebook";
+
+    struct Rule *rule = malloc(sizeof(*rule));
+    rule->set = 1;
+    strcpy(rule->src, src);
+    strcpy(rule->dst, dst);
+    strcpy(rule->master_proto, "DNS");
+    strcpy(rule->app_proto, app_proto);
+    rule->dport = dport;
+    rule->policy = ALLOW;
+
+    actual = is_match(rule, src, dst, dport, master_proto, app_proto);
     free(rule);
     
     assert_int_equal(actual, expected);
@@ -405,11 +446,12 @@ static void rule_set_test_success(void **state)
     expected_rule->set = 1;
     strcpy(expected_rule->src, "any");
     strcpy(expected_rule->dst, "any");
-    strcpy(expected_rule->app, "any");
+    strcpy(expected_rule->master_proto, "any");
+    strcpy(expected_rule->app_proto, "any");
     expected_rule->dport = 100;
     expected_rule->policy = ALLOW;
 
-    rule_set(conn, 0, "any", "any", 100, "any", ALLOW);
+    rule_set(conn, 0, "any", "any", 100, "any", "any", ALLOW);
 
     // retrieve actual values
     struct Rule *actual_rule = &conn->rules->rules[0];
@@ -498,8 +540,72 @@ static void rules_open_test_create(void **state)
     free(conn);
 }
 
+static void parse_string_test_success(void **state)
+{
+    (void) state; /* unused */
+
+    char *pattern = "\\d+\\.\\d+\\.\\d+\\.\\d+";
+    char *string = "192.293.44.1";
+
+    char **expected = malloc(sizeof(char *));
+    expected[0] = malloc(strlen(string) * sizeof(char));
+    expected[0] = string;
+
+    char **actual = parse_string(string, pattern, 0);
+
+    assert_string_equal(expected[0], actual[0]);
+
+    free(actual);
+    free(expected);
+}
+
+static void parse_string_test_fail(void **state)
+{
+    (void) state; /* unused */
+
+    char *pattern = "\\d+\\.\\d+\\.\\d+\\.\\d+";
+    char *string = "123.2e3.44.1";
+
+    char **actual = parse_string(string, pattern, 0);
+
+    assert_null(actual);
+}
+
+static void parse_string_test_groups(void **state)
+{
+    (void) state; /* unused */
+
+    char *pattern = "(\\d+)\\.(\\d+)\\.(\\d+)\\.(\\d+)";
+    char string[] = "192.293.44.1";
+
+    char **expected = malloc(4 * sizeof(char *));
+    int i = 0;
+    for (i = 0; i < 4; i++) {
+	expected[i] = malloc(strlen(string) * sizeof(char));
+    }
+
+    expected[0] = "192";
+    expected[1] = "293";
+    expected[2] = "44";
+    expected[3] = "1";
+
+    char **actual = parse_string(string, pattern, 0);
+
+    assert_string_equal(actual[1], expected[0]);
+    assert_string_equal(actual[2], expected[1]);
+    assert_string_equal(actual[3], expected[2]);
+    assert_string_equal(actual[4], expected[3]);
+
+    free(actual);
+    free(expected);
+}
+
+
 int main(void) {
     const struct CMUnitTest tests[] = {
+    cmocka_unit_test(parse_string_test_groups),
+    cmocka_unit_test(parse_string_test_fail),
+    cmocka_unit_test(parse_string_test_success),
     cmocka_unit_test(set_policy_test_allow),
     cmocka_unit_test(set_policy_test_deny),
     cmocka_unit_test(set_policy_test_reject),
@@ -507,7 +613,8 @@ int main(void) {
     cmocka_unit_test(set_policy_test_invalid),
     cmocka_unit_test(get_rules_num_test),
     cmocka_unit_test(is_match_test_all_any),
-    cmocka_unit_test(is_match_test_app_no_match),
+    cmocka_unit_test(is_match_test_app_proto_no_match),
+    cmocka_unit_test(is_match_test_master_proto_no_match),
     cmocka_unit_test(is_match_test_dport_no_match),
     cmocka_unit_test(is_match_test_dst_no_match),
     cmocka_unit_test(is_match_test_src_no_match),

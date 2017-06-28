@@ -13,7 +13,8 @@ struct Rule {
     char src[16];
     char dst[16];
     unsigned short dport;
-    char app[MAX_DATA];
+    char master_proto[MAX_DATA];
+    char app_proto[MAX_DATA];
     int policy;
 };
 
@@ -41,7 +42,8 @@ void rules_write(struct Connection *conn);
 void rules_create(struct Connection *conn);
 
 void rule_set(struct Connection *conn, int id, const char *src,
-	const char *dst, const unsigned short dport, const char *app, const int policy);
+	const char *dst, const unsigned short dport, const char *master_proto, 
+	const char *app_proto, const int policy);
 
 void rule_get(struct Connection *conn, int id);
 
@@ -57,3 +59,5 @@ int is_match(struct Rule *rule, char *src, char *dst, unsigned short dport,
 int get_rules_num(struct Connection *conn);
 
 int set_policy(char *policy_str);
+
+const char **parse_string(char *string, char *pattern, int debug);

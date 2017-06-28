@@ -1,46 +1,35 @@
-#include <pcre.h>
 #include <stdio.h>
 #include <string.h>
 #include <stdlib.h>
 
 #include "rule_helper.h"
 
-const char *ip_pattern = "(\\d+)\\.(\\d+)\\.(\\d+)\\.(\\d+)";
+char *ip_pattern = "\\d+\\.\\d+\\.\\d+\\.\\d+";
+char *proto_pattern = "(.+)\\.(.+)";
 
-int validate_ip_string(char *string)
+int validate_inputs(char *proto, char *src, char *dst, char *policy)
 {
-    if (strcmp(string, "any") == 0) {
-	return 1;
+    if (parse_string(proto, proto_pattern, 1) == NULL) {
+        free(proto);
+	return 0;
+    } 
+    
+    if ((parse_string(src, ip_pattern, 0) == NULL) && (strcmp(src, "any") != 0)) {
+        printf("ERROR: '%s' ip is invalid.\n", src);
+	return 0;
+    }
+    
+    if ((parse_string(dst, ip_pattern, 0) == NULL) && (strcmp(dst, "any") != 0)) {
+        printf("ERROR: '%s' IP is invalid.\n", dst);
+	return 0;
+    }
+    
+    if (set_policy(policy) == 0) {
+        printf ("%s is an invalid policy.\n", policy);
+	return 0;
     }
 
-    pcre *re_compiled;
-    pcre_extra *pcre_ex;
-    const char pcre_error_str;
-    int pcre_error_offset;
-    int pcre_exec_ret;
-    int sub_str_vec[30];
-
-    int ret = 0;
-
-    re_compiled = pcre_compile(ip_pattern, 0, &pcre_error_str, &pcre_error_offset, NULL);
-
-    if (re_compiled == NULL) {
-	printf("ERROR: could not compile '%s': %s\n", ip_pattern, pcre_error_str);
-	exit(1);
-    }
-
-    pcre_ex = pcre_study(re_compiled, 0, &pcre_error_str);
-    if (pcre_error_str != NULL) {
-	printf("ERROR: Could not study '%s': %s\n", ip_pattern, pcre_error_str);
-    }
-
-    pcre_exec_ret = pcre_exec(re_compiled, pcre_ex, string, strlen(string), 0, 0, sub_str_vec, 30);
-
-    if (pcre_exec_ret > 0) {
-	ret = 1;
-    }
-
-    return ret;
+    return 1;
 }
 
 int main(int argc, char **argv)
@@ -50,22 +39,19 @@ int main(int argc, char **argv)
 	exit(1);
     }
     
+    int are_valid;
+    
     char *filename = argv[1];
     char action = argv[2][0];
     struct Connection *conn = rules_open(filename, action);
     
     unsigned short dport;
     int policy;
-    char *src, *dst, *app, *policy_str;
+    char *src, *dst, *proto_str, *policy_str;
+    const char *master_proto, *app_proto;
+    const char **proto;
 
     int id = 0;
-    if (argc > 3) {
-	id = atoi(argv[3]);
-    }
-    
-    if (id >= MAX_RULES) {
-	die("There's not so many records.", conn);
-    }
     
     switch(action) {
 	case 'A':
@@ -82,26 +68,21 @@ int main(int argc, char **argv)
 	src = argv[3];
 	dst = argv[4];
 	dport = (unsigned short)atoi(argv[5]);
-	app = argv[6];
+	proto_str = argv[6];
 	policy_str = argv[7];
 
-	if (validate_ip_string(src) == 0) {
-	    printf("ERROR: '%s' ip is invalid.\n", src);
-	    die("Enter a valid IP.", conn);
+	are_valid = validate_inputs(proto_str, src, dst, policy_str);
+	if (are_valid == 0) {
+	    die("One of the inputs was incorrect.", conn);
 	}
-
-	if (validate_ip_string(dst) == 0) {
-	    printf("ERROR: '%s' IP is invalid.\n", dst);
-	    die("Enter a valid IP.", conn);
-	}
+	
+	proto = parse_string(proto_str, proto_pattern, 1);
+	master_proto = proto[1];
+	app_proto = proto[2];
 
 	policy = set_policy(policy_str);
-	if (policy == 0) {
-	    printf ("%s is an invalid policy.\n", policy_str);
-	    die("Valid options are: 'ALLOW', 'DENY', 'REJECT', 'ALLOW with IPS'.", conn);
-	}
 
-	rule_set(conn, id, src, dst, dport, app, policy);
+	rule_set(conn, id, src, dst, dport, master_proto, app_proto, policy);
 	rules_write(conn);
 	break;
     case 'c':
@@ -113,6 +94,11 @@ int main(int argc, char **argv)
 	    die("Need id to delete.", conn);
 	}
     
+	id = atoi(argv[3]);
+	if (id >= MAX_RULES) {
+	    die("There's not so many records.", conn);
+	}
+	
 	rule_delete(conn, id);
 	rules_write(conn);
 	break;
@@ -121,6 +107,11 @@ int main(int argc, char **argv)
 	    die("Need an id to get.", conn);
 	}
     
+	id = atoi(argv[3]);
+	if (id >= MAX_RULES) {
+	    die("There's not so many records.", conn);
+	}
+
 	rule_get(conn, id);
 	break;
     case 'I':
@@ -129,33 +120,33 @@ int main(int argc, char **argv)
 	    src = argv[3];
 	    dst = argv[4];
 	    dport = (unsigned short)atoi(argv[5]);
-	    app = argv[6];
+	    proto_str = argv[6];
 	    policy_str = argv[7];
 	} else if (argc == 9) {
+	    id = atoi(argv[3]);
+	    if (id >= MAX_RULES) {
+		die("There's not so many records.", conn);
+	    }
+	    
 	    src = argv[4];
 	    dst = argv[5];
 	    dport = (unsigned short)atoi(argv[6]);
-	    app = argv[7];
+	    proto_str = argv[7];
 	    policy_str = argv[8];
 	} else {
 	    die("Need [id], src, dst, dport, app, policy to insert.", conn);
 	}
 
-	if (validate_ip_string(src) == 0) {
-	    printf("ERROR: '%s' ip is invalid.\n", src);
-	    die("Enter a valid IP.", conn);
+	are_valid = validate_inputs(proto_str, src, dst, policy_str);
+	if (are_valid == 0) {
+	    die("One of the inputs was incorrect.", conn);
 	}
 
-	if (validate_ip_string(dst) == 0) {
-	    printf("ERROR: '%s' IP is invalid.\n", dst);
-	    die("Enter a valid IP.", conn);
-	}
+	proto = parse_string(proto_str, proto_pattern, 1);
+	master_proto = proto[1];
+	app_proto = proto[2];
 
 	policy = set_policy(policy_str);
-	if (policy == 0) {
-	    printf ("%s is an invalid policy.\n", policy_str);
-	    die("Valid options are: 'ALLOW', 'DENY', 'REJECT', 'ALLOW with IPS'.", conn);
-	}
 
 	int num_of_rules = get_rules_num(conn);
 	if (num_of_rules >= MAX_RULES) {
@@ -202,9 +193,13 @@ int main(int argc, char **argv)
 	// set dport
         rules->rules[id].dport = dport;
         
-	// set app
-        res = strncpy(rules->rules[id].app, app, MAX_DATA);
-        rules->rules[id].app[sizeof(rules->rules[id].app) - 1] = '\0';
+	// set master_proto
+        res = strncpy(rules->rules[id].master_proto, master_proto, MAX_DATA);
+        rules->rules[id].master_proto[sizeof(rules->rules[id].master_proto) - 1] = '\0';
+	
+	// set app_proto
+        res = strncpy(rules->rules[id].app_proto, app_proto, MAX_DATA);
+        rules->rules[id].app_proto[sizeof(rules->rules[id].app_proto) - 1] = '\0';
         
 	if (!res) {
 	    die("Application copy failed.", conn);
@@ -225,33 +220,33 @@ int main(int argc, char **argv)
 	    die("Need id, src, dst, dport, app and policy to set.", conn);
 	}
 	
+	id = atoi(argv[3]);
+	if (id >= MAX_RULES) {
+	    die("There's not so many records.", conn);
+	}
+	
 	src = argv[4];
 	dst = argv[5];
 	dport = (unsigned short)atoi(argv[6]);
-	app = argv[7];
+	proto_str = argv[7];
 	policy_str = argv[8];
 
-	if (validate_ip_string(src) == 0) {
-	    printf("ERROR: '%s' ip is invalid.\n", src);
-	    die("Enter a valid IP.", conn);
+	are_valid = validate_inputs(proto_str, src, dst, policy_str);
+	if (are_valid == 0) {
+	    die("One of the inputs was incorrect.", conn);
 	}
 
-	if (validate_ip_string(dst) == 0) {
-	    printf("ERROR: '%s' ip is invalid.\n", dst);
-	    die("Enter a valid IP.", conn);
-	}
+	proto = parse_string(proto_str, proto_pattern, 1);
+	master_proto = proto[1];
+	app_proto = proto[2];
 
 	policy = set_policy(policy_str);
-	if (policy == 0) {
-	    printf ("%s is an invalid policy.\n", policy_str);
-	    die("Valid options are: 'ALLOW', 'DENY', 'REJECT', 'ALLOW with IPS'.", conn);
-	}
 
-	rule_set(conn, id, src, dst, dport, app, policy);
+	rule_set(conn, id, src, dst, dport, master_proto, app_proto, policy);
 	rules_write(conn);
 	break;
     default:
-	die("Invalid action: A=append, c=create, d = delete, g=get, I=insert, l=list, s=set", conn);
+	die("Invalid action: A=append, c=create, d=delete, g=get, I=insert, l=list, s=set", conn);
     }
     
     rules_close(conn);

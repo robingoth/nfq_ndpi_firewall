@@ -23,8 +23,8 @@ TESTS_CFLAGS = -g -Wall -I$(INCDIR) -I$(NDPIDIR)/src/include $(LIBSDIR)/nDPI/lib
 RM_WRAPS = -Wl,--wrap=fopen,--wrap=fread
 NH_WRAPS = -Wl,--wrap=set_ndpi_malloc,--wrap=set_ndpi_free,--wrap=set_ndpi_flow_malloc,--wrap=set_ndpi_flow_free,--wrap=ndpi_init_detection_module,--wrap=NDPI_BITMASK_SET_ALL,--wrap=ndpi_set_protocol_detection_bitmask2,--wrap=ndpi_detection_process_packet
 
-LIBS = -lndpi -lnetfilter_queue
-TESTLIBS = -lcmocka
+LIBS = -lndpi -lnetfilter_queue -lpcre
+TESTLIBS = -lcmocka -lpcre
 
 _DEPS = ndpi_helper.h rule_helper.h
 # Replace all filenames in dependencies with a relative path
@@ -42,7 +42,7 @@ OBJS_RH_TESTS = $(patsubst %, $(OBJDIR)/%, $(_OBJS_RH_TESTS))
 OBJS_NH_TESTS = $(patsubst %, $(OBJDIR)/%, $(_OBJS_NH_TESTS))
 
 $(OBJDIR)/%.o: %.c $(DEPS)
-	$(CC) -c -o $@ $< $(CFLAGS)
+	$(CC) -c -o $@ $< $(CFLAGS) 
 
 $(OBJDIR)/%.o: $(TESTSDIR)/%.c $(DEPS)
 	$(CC) -c -o $@ $< $(TESTS_CFLAGS)  
@@ -53,7 +53,7 @@ $(PROGRAMNAME): $(OBJS)
 	$(CC) -o $@ $^ $(CFLAGS) $(LIBS)
 
 $(PROGRAMNAME2): $(OBJS2) 
-	$(CC) -o $@ $^ $(CFLAGS2) -lpcre 
+	$(CC) -o $@ $^ $(CFLAGS2) $(LIBS) 
 
 $(RM_TESTS): $(OBJS_RH_TESTS)
 	$(CC) -o $(TESTSDIR)/$@ $^ $(TESTS_CFLAGS) $(RM_WRAPS) $(TESTLIBS)
