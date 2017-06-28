@@ -162,7 +162,6 @@ static int cb(struct nfq_q_handle *qh, struct nfgenmsg *nfmsg,
 	    switch (cur->policy) {
 		case ALLOW:
 		    verdict = NF_ACCEPT;
-		    AllowedPackets++;
 		    break;
 		case DENY:
 		    verdict = NF_DROP;
@@ -183,7 +182,11 @@ static int cb(struct nfq_q_handle *qh, struct nfgenmsg *nfmsg,
 	    }
 	    // exit the loop in case of match
 	    break;
-	}
+	} 
+    }
+    
+    if (verdict == NF_ACCEPT) {
+	AllowedPackets++;	
     }
     
     return nfq_set_verdict2(qh, id, verdict, 0xE, 0, NULL);
