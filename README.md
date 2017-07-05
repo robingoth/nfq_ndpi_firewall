@@ -5,4 +5,5 @@ how to build:
 - compile nDPI
 - cd to src directory
 - use *make* to compile the solution
-- use *make RuleManager* to compile Rule Manager tool
+
+NOTE: make sure all queues are free, otherwise the program will fail
