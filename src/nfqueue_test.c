@@ -172,7 +172,7 @@ void *process_thread(void *data)
 	t_printf(t_data->id, "can't set packet_copy mode\n");
 	exit(1);
     }
-
+    
     t_data->fd = nfq_fd(t_data->handle);
 
     while ((rv = recv(t_data->fd, buf, sizeof(buf), 0)) && rv >= 0) {
@@ -201,27 +201,14 @@ int main(int argc, char **argv)
     pthread_mutex_init(&mutex_c, NULL);
     pthread_mutex_init(&mutex_pt, NULL);
     
-    struct q_data **data = malloc(NUM_QUEUES * sizeof(struct q_data *));
-    if (data == NULL) {
-	printf("Main: data allocation failed.\n");
-	exit(1);
-    }
-
-    int t = 0;
-    for (t = 0; t < NUM_QUEUES; t++) {
-	data[t] = malloc(sizeof(struct q_data *));
-
-	if (data[t] == NULL) {
-    	    printf("Main: data allocation failed.\n");
-    	    exit(1);
-    	}
-    }
+    struct q_data data[NUM_QUEUES];
 
     int i = 0;
     for (i = 0; i < NUM_QUEUES; i++) {
-	data[i]->id = i;
-	printf("Main: creating thread %d\n", data[i]->id);
-	rc = pthread_create(&threads[i], NULL, process_thread, (void *)data[i]);
+	data[i].id = i;
+	
+	printf("Main: creating thread %d\n", data[i].id);
+	rc = pthread_create(&threads[i], NULL, process_thread, &data[i]);
 
 	if (rc) {
 	    printf("ERROR; return code from pthread_create() is %d\n", rc);
@@ -240,6 +227,7 @@ int main(int argc, char **argv)
     }
 
     printf("Main: program completed. Exiting.\n");
+    
     pthread_mutex_destroy(&mutex_c);
     pthread_mutex_destroy(&mutex_pt);
     pthread_exit(NULL);
