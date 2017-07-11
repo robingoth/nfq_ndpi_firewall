@@ -10,7 +10,7 @@
 
 #include "ndpi_helper.h"
 
-#define NUM_QUEUES 3
+#define NUM_QUEUES 4
 
 struct q_data {
     int id;
@@ -22,6 +22,9 @@ struct q_data {
 
 // Globals
 pthread_mutex_t mutex, mutex_c, mutex_pt;
+
+
+void t_printf(int tid, char *format, ...);
 
 void print_pkt (int tid, struct nfq_data *tb, struct nfqnl_msg_packet_hdr *pkt_hdr, 
 	char *master_protocol, char *app_protocol)
@@ -95,7 +98,7 @@ static int cb(struct nfq_q_handle *qh, struct nfgenmsg *nfmsg,
     if (pkt_hdr) {
 	id = ntohl(pkt_hdr->packet_id);
     } else {
-	printf("Packet header could not be retrieved.\n");
+	t_printf(t_data->id, "Packet header could not be retrieved.\n");
 	return -1; //error code of nfq_set_verdict
     }
 
@@ -104,12 +107,12 @@ static int cb(struct nfq_q_handle *qh, struct nfgenmsg *nfmsg,
 
     // if error
     if (is_success != 0) {
-	printf("Timestamp was not retrieved. Skipping current packet.\n");
+	t_printf(t_data->id, "Timestamp was not retrieved. Skipping current packet.\n");
     } else {    
 	unsigned short payload_size = nfq_get_payload(nfa, &packet_data);
 	// if error
 	if (payload_size == -1) {
-	    printf("Packet payload was not retrieved. Skipping current packet.\n");
+	    t_printf(t_data->id, "Packet payload was not retrieved. Skipping current packet.\n");
 	} else {
 	    proto = detect_protocol(packet_data, payload_size, tv, t_data->ndpi_struct);
 	    master_proto = ndpi_get_proto_name(t_data->ndpi_struct, proto.master_protocol);
