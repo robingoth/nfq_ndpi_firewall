@@ -22,7 +22,7 @@ struct q_data {
 
 // Globals
 pthread_mutex_t mutex, mutex_c, mutex_pt;
-
+int Quiet = 0;
 
 void t_printf(int tid, char *format, ...);
 
@@ -105,22 +105,30 @@ static int cb(struct nfq_q_handle *qh, struct nfgenmsg *nfmsg,
     struct timeval tv;
     int is_success = nfq_get_timestamp(nfa, &tv);
 
-    // if error
-    if (is_success != 0) {
-	t_printf(t_data->id, "Timestamp was not retrieved. Skipping current packet.\n");
-    } else {    
-	unsigned short payload_size = nfq_get_payload(nfa, &packet_data);
-	// if error
-	if (payload_size == -1) {
-	    t_printf(t_data->id, "Packet payload was not retrieved. Skipping current packet.\n");
-	} else {
-	    proto = detect_protocol(packet_data, payload_size, tv, t_data->ndpi_struct);
-	    master_proto = ndpi_get_proto_name(t_data->ndpi_struct, proto.master_protocol);
-	    app_proto = ndpi_get_proto_name(t_data->ndpi_struct, proto.app_protocol);;
-
-	    print_pkt(t_data->id, nfa, pkt_hdr, master_proto, app_proto);
+    if (is_success != 0 || tv.tv_sec == 0) {
+	if (!Quiet) {
+	    //t_printf(t_data->id, "Timestamp was not retrieved. Setting it to current time.\n");
 	}
-    }   
+
+	memset (&tv, 0, sizeof(struct timeval));
+	gettimeofday(&tv, NULL);
+    }
+
+    unsigned short payload_size;
+    payload_size = nfq_get_payload(nfa, &packet_data);
+
+    if (payload_size == -1) {
+	t_printf(t_data->id, "Packet payload was not retrieved. Skipping current packet.\n");
+	return -1;
+    }
+
+    proto = detect_protocol(packet_data, payload_size, tv, t_data->ndpi_struct);
+    master_proto = ndpi_get_proto_name(t_data->ndpi_struct, proto.master_protocol);
+    app_proto = ndpi_get_proto_name(t_data->ndpi_struct, proto.app_protocol);
+
+    if (!Quiet) {
+	print_pkt(t_data->id, nfa, pkt_hdr, master_proto, app_proto);
+    }
 
     pthread_mutex_lock(&mutex_c);
     return nfq_set_verdict(qh, id, NF_ACCEPT, 0, NULL);
