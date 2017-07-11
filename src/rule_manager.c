@@ -10,12 +10,12 @@ char *proto_pattern = "(.+)\\.(.+)";
 int validate_inputs(char *proto, char *src, char *dst, char *policy)
 {
     if (parse_string(proto, proto_pattern, 1) == NULL) {
-        free(proto);
+	printf("ERROR: protocol is invalid. Acceptable format = master_proto.app_proto.\n");
 	return 0;
     } 
     
     if ((parse_string(src, ip_pattern, 0) == NULL) && (strcmp(src, "any") != 0)) {
-        printf("ERROR: '%s' ip is invalid.\n", src);
+        printf("ERROR: '%s' IP is invalid.\n", src);
 	return 0;
     }
     
