@@ -114,28 +114,35 @@ static int cb(struct nfq_q_handle *qh, struct nfgenmsg *nfmsg,
     int is_success = nfq_get_timestamp(nfa, &tv);
     
     // if error
-    if (is_success != 0) {
-	printf("Timestamp was not retrieved. Skipping current packet.\n");
-    } else {	
-	unsigned short payload_size = nfq_get_payload(nfa, &packet_data);
-	// if error
-	if (payload_size == -1) {
-	    printf("Packet payload was not retrieved. Skipping current packet.\n");
-	} else {
-	    proto = detect_protocol(packet_data, payload_size, tv, NdpiStruct);
-	    master_proto = ndpi_get_proto_name(NdpiStruct, proto.master_protocol);
-	    app_proto = ndpi_get_proto_name(NdpiStruct, proto.app_protocol);;
-	    
-	    ProtocolCounter[proto.app_protocol]++;
-
-	    if (!Quiet) {
-		print_pkt(nfa, pkt_hdr, master_proto, app_proto);
-	    }
+    if (is_success != 0 || tv.tv_sec == 0) {
+	if (!Quiet) {
+	    printf("Timestamp was not retrieved. Setting it to current time.\n");
 	}
+
+	memset (&tv, 0, sizeof(struct timeval));
+        gettimeofday(&tv, NULL);
+    }
+
+    unsigned short payload_size;
+    payload_size = nfq_get_payload(nfa, &packet_data);
+    // if error
+    if (payload_size == -1) {
+        printf("Packet payload was not retrieved. Skipping current packet.\n");
+        return -1;
+    }
+    
+    proto = detect_protocol(packet_data, payload_size, tv, NdpiStruct);
+    master_proto = ndpi_get_proto_name(NdpiStruct, proto.master_protocol);
+    app_proto = ndpi_get_proto_name(NdpiStruct, proto.app_protocol);;
+    
+    ProtocolCounter[proto.app_protocol]++;
+    
+    if (!Quiet) {
+    print_pkt(nfa, pkt_hdr, master_proto, app_proto);
     }
 
     unsigned char *p_data;
-    nfq_get_payload(nfa, &p_data);;
+    nfq_get_payload(nfa, &p_data);
     struct iphdr *ip_info = (struct iphdr *)p_data;
     unsigned short dport;
 
@@ -328,7 +335,7 @@ int main(int argc, char **argv)
 
     printf("binding existing nf_queue handler for AF_INET (if any)\n");
     if (nfq_bind_pf(H, AF_INET) < 0) {
-        fprintf(stderr, "erorr during nfq_bind_pf()\n");
+        fprintf(stderr, "error during nfq_bind_pf()\n");
 	exit(1);
     }
 
