@@ -85,9 +85,13 @@ void print_pkt (int tid, struct nfq_data *tb, struct nfqnl_msg_packet_hdr *pkt_h
     printf("proto = %s.%s.\n", master_protocol, app_protocol);
 }
 
+/*
+ * Callback function called for each packet 
+ */
 static int cb(struct nfq_q_handle *qh, struct nfgenmsg *nfmsg,
 	struct nfq_data *nfa, void *data)
 {
+    // read thread-specific data
     struct q_data *t_data = (struct q_data *)data;
 
     int id;
@@ -107,12 +111,9 @@ static int cb(struct nfq_q_handle *qh, struct nfgenmsg *nfmsg,
     struct timeval tv;
     int is_success = nfq_get_timestamp(nfa, &tv);
 
+    // if the timestamp was not retrieved, set it to local time
     if (is_success != 0 || tv.tv_sec == 0) {
-	if (!Quiet) {
-	    //t_printf(t_data->id, "Timestamp was not retrieved. Setting it to current time.\n");
-	}
-
-	memset (&tv, 0, sizeof(struct timeval));
+	memset(&tv, 0, sizeof(struct timeval));
 	gettimeofday(&tv, NULL);
     }
 
@@ -124,6 +125,7 @@ static int cb(struct nfq_q_handle *qh, struct nfgenmsg *nfmsg,
 	return -1;
     }
 
+    // detect protocol
     proto = detect_protocol(packet_data, payload_size, tv, &t_data->workflow); 
     master_proto = ndpi_get_proto_name(t_data->workflow.ndpi_struct, proto.master_protocol);
     app_proto = ndpi_get_proto_name(t_data->workflow.ndpi_struct, proto.app_protocol);
@@ -132,10 +134,17 @@ static int cb(struct nfq_q_handle *qh, struct nfgenmsg *nfmsg,
 	print_pkt(t_data->id, nfa, pkt_hdr, master_proto, app_proto);
     }
 
+    // unlock happens in process_thread()
     pthread_mutex_lock(&mutex_c);
     return nfq_set_verdict(qh, id, NF_ACCEPT, 0, NULL);
 }
 
+/*
+ * Print wrapper for threads
+ * Input arguments:
+ *	tid - thread id
+ *	format - string format like for printf()
+ */
 void t_printf(int tid, char *format, ...) 
 {
     va_list ap;
@@ -150,6 +159,7 @@ void *process_thread(void *data)
     int rv;
     char buf[4096] __attribute__ ((aligned));
 
+    // retrieve thread-specific data
     struct q_data *t_data = (struct q_data *)data;
 
     t_printf(t_data->id, "opening library handle\n");
@@ -186,6 +196,7 @@ void *process_thread(void *data)
     
     t_data->fd = nfq_fd(t_data->handle);
 
+    // read packet and process it
     while ((rv = recv(t_data->fd, buf, sizeof(buf), 0)) && rv >= 0) {
 	pthread_mutex_lock(&mutex_pt);
 	nfq_handle_packet(t_data->handle, buf, rv);
@@ -240,7 +251,7 @@ int main(int argc, char **argv)
 	data[i].workflow = *workflow;
     }
 
-
+    // create threads
     for (i = 0; i < NUM_QUEUES; i++) {
 	printf("Main: creating thread %d\n", data[i].id);
 	rc = pthread_create(&threads[i], NULL, process_thread, &data[i]);

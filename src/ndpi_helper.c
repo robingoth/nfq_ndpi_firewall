@@ -5,27 +5,28 @@
 #include "ndpi_helper.h"
 
 /*
- *  malloc wrapper function
+ *  Malloc wrapper function.
  */
-void *malloc_wrapper(size_t size) 
+static void *malloc_wrapper(size_t size) 
 {
     return malloc(size);
 }
 
 /*
- *  free wrapper function
+ *  Free wrapper function.
  */
-void free_wrapper(void *freeable) 
+static void free_wrapper(void *freeable) 
 {
     free(freeable);
 }
 
 /*
- *  setup detection
+ *  Sets function pointers needed for nDPI and 
+ *  creates a nDPI structure.
  */
-struct ndpi_detection_module_struct *setup_detection(void *data)
+struct ndpi_detection_module_struct *setup_detection()
 {
-NDPI_PROTOCOL_BITMASK all;
+    NDPI_PROTOCOL_BITMASK all;
     
     set_ndpi_malloc(malloc_wrapper), set_ndpi_free(free_wrapper);
     set_ndpi_flow_malloc(NULL), set_ndpi_flow_free(NULL);
@@ -43,7 +44,11 @@ NDPI_PROTOCOL_BITMASK all;
     return ndpi_struct;
 }
 
-int ndpi_workflow_node_cmp(const void *a, const void *b) {
+/*
+ * Compare two flows.
+ * Needed for ndpi_tfind() and ndpi_tsearch().
+ */
+static int ndpi_workflow_node_cmp(const void *a, const void *b) {
     struct flow_info *flow_a = (struct flow_info*)a;
     struct flow_info *flow_b = (struct flow_info*)b;
 
@@ -100,6 +105,18 @@ int ndpi_workflow_node_cmp(const void *a, const void *b) {
     return(0); /* should not be reached */
 }
 
+/*
+ *  Find an existing flow for a packet or create a new one.
+ *  Input arguments:
+ *	workflow - a structure set in main().
+ *	iph - IP header, set in detect_proto()
+ *	ipsize - packet size
+ *	src - nDPI specific structure used for detection
+ *	dst - nDPI specific structure used for detection
+ *	proto - TCP, UDP, etc.
+ *
+ *  Returns a structure with the flow information
+ */
 static struct flow_info *
 get_flow_info(struct ndpi_workflow *workflow, const struct ndpi_iphdr *iph,
 		    u_int16_t ipsize, struct ndpi_id_struct **src,
@@ -122,6 +139,7 @@ get_flow_info(struct ndpi_workflow *workflow, const struct ndpi_iphdr *iph,
 
     l4_packet_len = ntohs(iph->tot_len) - (iph->ihl * 4);
 
+    // determine source and destination port
     if (iph->protocol == IPPROTO_TCP && l4_packet_len >= 20) {
 	tcph = (struct ndpi_tcphdr *)l4;
 	sport = ntohs(tcph->source); 
@@ -215,7 +233,10 @@ get_flow_info(struct ndpi_workflow *workflow, const struct ndpi_iphdr *iph,
     return ret;
 }
 
-void free_flow_partially(struct flow_info *flow) {
+/*
+ * Free some information from the flow.
+ */
+static void free_flow_partially(struct flow_info *flow) {
     if(flow->ndpi_flow != NULL) { 
 	ndpi_flow_free(flow->ndpi_flow); 
 	flow->ndpi_flow = NULL; 
@@ -232,7 +253,10 @@ void free_flow_partially(struct flow_info *flow) {
     }
 }
 
-void process_ndpi_collected_info(struct ndpi_workflow * workflow, struct flow_info *flow) {
+/*
+ *  Set SSH/SSL specific fields of flow
+ */
+static void process_ndpi_collected_info(struct ndpi_workflow * workflow, struct flow_info *flow) {
     if(!flow->ndpi_flow) {
 	printf("ERROR: flow is NULL \n");
 	exit(1);
@@ -261,11 +285,19 @@ void process_ndpi_collected_info(struct ndpi_workflow * workflow, struct flow_in
     }
 }
 
-static struct ndpi_proto 
-process_pkt(struct ndpi_workflow *workflow, 
-	    const unsigned char *packet, 
-	    const unsigned short packetlen, 
-	    struct timeval timestamp)
+/*
+ *  Detect protocol.
+ *  Input arguments:
+ *	packet - pointer to a packet
+ *	packetlen - packet size
+ *	timestamp - timestamp of a packet
+ *	workflow - a structure set in main()
+ *
+ *  Returns a structure containing master_proto, app_proto
+ */
+struct ndpi_proto 
+detect_protocol(const unsigned char *packet, const unsigned short packetlen,
+		struct timeval timestamp, struct ndpi_workflow *workflow)
 {
     struct ndpi_iphdr *iph; 
     struct ndpi_id_struct *src, *dst;
@@ -300,15 +332,15 @@ process_pkt(struct ndpi_workflow *workflow,
 
     if(flow->detection_completed == 0) {
 	flow->detected_protocol = ndpi_detection_process_packet(workflow->ndpi_struct, 
-								ndpi_flow,
-								(uint8_t *)iph, 
-								packetlen,
-								tick, 
-								src, dst);
+				    ndpi_flow, (uint8_t *)iph, packetlen, tick, src, dst);
+	
+	/* stop detection if protocol was determined or number of packets in the flow
+	 * has exceeded specific value 
+	 */
 	if ((flow->detected_protocol.app_protocol != NDPI_PROTOCOL_UNKNOWN) || 
 		((ip_proto == IPPROTO_UDP) && (flow->packets > 8)) || 
 		((ip_proto == IPPROTO_TCP) && (flow->packets > 10))) {
-	    /* New protocol detected or give up */
+	    // New protocol detected or give up
 	    flow->detection_completed = 1;
 
 	    if (flow->detected_protocol.app_protocol == NDPI_PROTOCOL_UNKNOWN) {
@@ -322,18 +354,9 @@ process_pkt(struct ndpi_workflow *workflow,
     return flow->detected_protocol;
 }
 
-struct ndpi_proto detect_protocol(const unsigned char *packet, 
-			    const unsigned short packetlen, 
-			    struct timeval timestamp,
-			    struct ndpi_workflow *workflow)
-{
-    struct ndpi_proto detected_protocol;
-
-    detected_protocol = process_pkt(workflow, packet, packetlen, timestamp);
-
-    return detected_protocol;
-}
-
+/*
+ * For curious minds
+ */
 void print_proto_names(struct ndpi_detection_module_struct *ndpi_struct)
 {
     int i = 0;

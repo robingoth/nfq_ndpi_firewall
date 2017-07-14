@@ -40,32 +40,10 @@ struct flow_info {
     struct {
 	char client_info[48], server_info[48];
     } ssh_ssl;
-
 };
 
-/*
- *  malloc wrapper function
- */
-void *malloc_wrapper(size_t size);
-
-/*
- * free wrapper function
- */
-void free_wrapper(void *freeable);
-
-/*
- *  
- */
 struct ndpi_detection_module_struct *setup_detection();
 
-/*
- *
- */
-void create_ndpi_flow();
-
-/*
- *
- */
 struct ndpi_proto detect_protocol(const unsigned char *packet, 
 			const unsigned short packetlen, 
 			struct timeval timestamp,  
