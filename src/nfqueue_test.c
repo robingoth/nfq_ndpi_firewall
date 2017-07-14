@@ -11,12 +11,14 @@
 #include "ndpi_helper.h"
 
 #define NUM_QUEUES 4
+#define NUM_ROOTS 512
+#define MAX_FLOWS 200000000 
 
 struct q_data {
     int id;
-    struct ndpi_detection_module_struct *ndpi_struct;
     struct nfq_handle *handle;
     struct nfq_q_handle *q_handle;
+    struct ndpi_workflow workflow;
     int fd;
 };
 
@@ -122,9 +124,9 @@ static int cb(struct nfq_q_handle *qh, struct nfgenmsg *nfmsg,
 	return -1;
     }
 
-    proto = detect_protocol(packet_data, payload_size, tv, t_data->ndpi_struct);
-    master_proto = ndpi_get_proto_name(t_data->ndpi_struct, proto.master_protocol);
-    app_proto = ndpi_get_proto_name(t_data->ndpi_struct, proto.app_protocol);
+    proto = detect_protocol(packet_data, payload_size, tv, &t_data->workflow); 
+    master_proto = ndpi_get_proto_name(t_data->workflow.ndpi_struct, proto.master_protocol);
+    app_proto = ndpi_get_proto_name(t_data->workflow.ndpi_struct, proto.app_protocol);
 
     if (!Quiet) {
 	print_pkt(t_data->id, nfa, pkt_hdr, master_proto, app_proto);
@@ -149,8 +151,6 @@ void *process_thread(void *data)
     char buf[4096] __attribute__ ((aligned));
 
     struct q_data *t_data = (struct q_data *)data;
-
-    t_data->ndpi_struct = setup_detection();
 
     t_printf(t_data->id, "opening library handle\n");
     t_data->handle = nfq_open();
@@ -215,9 +215,33 @@ int main(int argc, char **argv)
     struct q_data data[NUM_QUEUES];
 
     int i = 0;
+    // prepare data for each thread
     for (i = 0; i < NUM_QUEUES; i++) {
 	data[i].id = i;
-	
+
+	struct ndpi_workflow *workflow = ndpi_calloc(1, sizeof(struct ndpi_workflow));
+	if (workflow == NULL) {
+	    printf("ERROR: thread data initialization failed");
+	    exit(1);
+	}
+
+	workflow->num_roots = NUM_ROOTS;
+	workflow->max_flows = MAX_FLOWS;
+	workflow->flow_count = 0;
+
+	workflow->ndpi_flows_root = ndpi_calloc(workflow->num_roots, sizeof(void *));
+	if (workflow->ndpi_flows_root == NULL) {
+	    printf("ERROR: thread data initialization failed");
+	    exit(1);
+	}
+
+	workflow->ndpi_struct = setup_detection();
+
+	data[i].workflow = *workflow;
+    }
+
+
+    for (i = 0; i < NUM_QUEUES; i++) {
 	printf("Main: creating thread %d\n", data[i].id);
 	rc = pthread_create(&threads[i], NULL, process_thread, &data[i]);
 
