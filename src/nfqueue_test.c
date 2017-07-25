@@ -11,14 +11,12 @@
 #include "ndpi_helper.h"
 
 #define NUM_QUEUES 4
-#define NUM_ROOTS 512
-#define MAX_FLOWS 200000000 
 
 struct q_data {
     int id;
     struct nfq_handle *handle;
     struct nfq_q_handle *q_handle;
-    struct ndpi_workflow workflow;
+    struct ndpi_workflow *workflow;
     int fd;
 };
 
@@ -126,12 +124,19 @@ static int cb(struct nfq_q_handle *qh, struct nfgenmsg *nfmsg,
     }
 
     // detect protocol
-    proto = detect_protocol(packet_data, payload_size, tv, &t_data->workflow); 
-    master_proto = ndpi_get_proto_name(t_data->workflow.ndpi_struct, proto.master_protocol);
-    app_proto = ndpi_get_proto_name(t_data->workflow.ndpi_struct, proto.app_protocol);
+    proto = detect_protocol(packet_data, payload_size, tv, t_data->workflow); 
+    master_proto = ndpi_get_proto_name(t_data->workflow->ndpi_struct, proto.master_protocol);
+    app_proto = ndpi_get_proto_name(t_data->workflow->ndpi_struct, proto.app_protocol);
 
     if (!Quiet) {
 	print_pkt(t_data->id, nfa, pkt_hdr, master_proto, app_proto);
+    }
+
+    // free idle flows
+    t_data->workflow->timestamp = tv;
+    if (t_data->workflow->last_idle_scan.tv_sec + IDLE_SCAN_PERIOD < tv.tv_sec) {
+	t_data->workflow->last_idle_scan = t_data->workflow->timestamp;
+	free_idle_flows(t_data->workflow);
     }
 
     // unlock happens in process_thread()
@@ -248,7 +253,7 @@ int main(int argc, char **argv)
 
 	workflow->ndpi_struct = setup_detection();
 
-	data[i].workflow = *workflow;
+	data[i].workflow = workflow;
     }
 
     // create threads

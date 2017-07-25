@@ -66,7 +66,8 @@ static int ndpi_workflow_node_cmp(const void *a, const void *b) {
 	return(1);
     }
 
-    if(((flow_a->src_ip == flow_b->src_ip)&& 
+    // if flows are equal return 0
+    if(((flow_a->src_ip == flow_b->src_ip) && 
 		(flow_a->src_port == flow_b->src_port) && 
 		(flow_a->dst_ip == flow_b->dst_ip) && 
 		(flow_a->dst_port == flow_b->dst_port)) ||
@@ -77,32 +78,20 @@ static int ndpi_workflow_node_cmp(const void *a, const void *b) {
 	return(0);    
     }
 
-
-    if (flow_a->src_ip < flow_b->src_ip) {
+    if ((flow_a->src_ip < flow_b->src_ip) || 
+	    (flow_a->src_port < flow_b->src_port) || 
+	    (flow_a->dst_ip < flow_b->dst_ip) || 
+	    (flow_a->dst_port < flow_b->dst_port)) {
 	return(-1); 
-    } else if (flow_a->src_ip > flow_b->src_ip) {
+    } else if ((flow_a->src_ip > flow_b->src_ip) || 
+	    (flow_a->src_port > flow_b->src_port) || 
+	    (flow_a->dst_ip > flow_b->dst_ip) || 
+	    (flow_a->dst_port > flow_b->dst_port)) {
 	return(1);
+    } else {
+	printf("Something went wrong during flow comparison.\n");
+	return 0; // should not be reached
     }
-
-    if (flow_a->src_port < flow_b->src_port) {
-	return(-1); 
-    } else if (flow_a->src_port > flow_b->src_port) {
-	return(1);
-    }
-
-    if (flow_a->dst_ip < flow_b->dst_ip) {
-	return(-1); 
-    } else if (flow_a->dst_ip > flow_b->dst_ip) {
-	return(1);
-    }
-
-    if (flow_a->dst_port < flow_b->dst_port) {
-	return(-1); 
-    } else if (flow_a->dst_port > flow_b->dst_port) {
-	return(1);
-    }
-
-    return(0); /* should not be reached */
 }
 
 /*
@@ -192,7 +181,7 @@ get_flow_info(struct ndpi_workflow *workflow, const struct ndpi_iphdr *iph,
 	    *dst = ret->src_id;
 	}
     } else {
-	// create new flow
+	// create a new flow
 	
 	if (workflow->flow_count > workflow->max_flows) {
 	    printf("ERROR: max number of flows was exceeded.\n");
@@ -284,6 +273,49 @@ static void process_ndpi_collected_info(struct ndpi_workflow * workflow, struct 
 	free_flow_partially(flow);
     }
 }
+
+/*
+ *  Traverses the tree to determine idle flows
+ */
+static void node_walker(const void *node, ndpi_VISIT which, int depth, void *user_data)
+{
+    struct flow_info *flow = *(struct flow_info **) node;
+    struct ndpi_workflow *workflow = (struct ndpi_workflow *)user_data;
+
+    /* Avoid walking the same node multiple times */
+    if ((which == ndpi_preorder) || (which == ndpi_leaf)) { 
+	if (flow->last_seen.tv_sec + MAX_IDLE_TIME < workflow->timestamp.tv_sec) {
+	    free_flow_partially(flow);
+	    workflow->flow_count--;
+
+	    workflow->num_idle_flows++;
+	    workflow->idle_flows[workflow->num_idle_flows] = flow;
+	}
+    }
+}
+
+/*
+ *  Deletes idle flows from memory
+ */
+void free_idle_flows(struct ndpi_workflow *workflow) 
+{
+    int i = 0;
+    for (i = 0; i < workflow->num_roots; i++) {
+	ndpi_twalk(workflow->ndpi_flows_root[i], node_walker, workflow);
+
+	while(workflow->num_idle_flows != 0) {
+    	    ndpi_tdelete(workflow->idle_flows[workflow->num_idle_flows], 
+    	    		&workflow->ndpi_flows_root[i], 
+    	    		ndpi_workflow_node_cmp);
+
+    	    free_flow_partially(workflow->idle_flows[workflow->num_idle_flows]);
+	    ndpi_free(workflow->idle_flows[workflow->num_idle_flows]);
+
+	    workflow->num_idle_flows--;
+    	}
+    }
+}
+
 
 /*
  *  Detect protocol.
