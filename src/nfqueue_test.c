@@ -1,3 +1,4 @@
+#include <conntrack_helper.h>
 #include <pthread.h>
 #include <stdarg.h>
 #include <stdio.h>
@@ -27,14 +28,11 @@ int Quiet = 0;
 void t_printf(int tid, char *format, ...);
 
 void print_pkt (int tid, struct nfq_data *tb, struct nfqnl_msg_packet_hdr *pkt_hdr, 
+	char *src_ip, char *dst_ip, unsigned short src_port, unsigned short dst_port,
 	char *master_protocol, char *app_protocol)
 {
     int id = 0;
     struct nfqnl_msg_packet_hw *hwph;
-
-    u_int32_t mark;
-    int ret;
-    unsigned char *data;
 
     printf("Thread %d: ", tid);
 
@@ -52,34 +50,7 @@ void print_pkt (int tid, struct nfq_data *tb, struct nfqnl_msg_packet_hdr *pkt_h
 	printf("%02x ", hwph->hw_addr[hlen - 1]);
     }
 
-    mark = nfq_get_nfmark(tb);
-    if (mark) {
-	printf("mark=%u ", mark);
-    }
-
-    ret = nfq_get_payload(tb, &data);
-    if (ret >= 0) {
-	printf("payload_len=%d ", ret);
-    }
-
-    struct iphdr *ip_info = (struct iphdr *)data;
-    unsigned short dest_port;
-    if (ip_info->protocol == IPPROTO_TCP) {
-	struct tcphdr *tcp_info = (struct tcphdr *)(data + sizeof(*ip_info));
-	dest_port = ntohs(tcp_info->dest);
-    } else if (ip_info->protocol == IPPROTO_UDP) {
-	struct udphdr *udp_info = (struct udphdr *)(data + sizeof(*ip_info));
-	dest_port = ntohs(udp_info->dest);
-    } else {
-	dest_port = 0;
-    }
-
-    printf("saddr=%s ", inet_ntoa(*((struct in_addr *)&(ip_info->saddr))));
-    printf("daddr=%s ", inet_ntoa(*((struct in_addr *)&(ip_info->daddr))));
-    printf("dport=%d ", dest_port);
-
-    fputc('\n', stdout);
-
+    printf("src=%s:%d dst=%s:%d\n", src_ip, src_port, dst_ip, dst_port);
     printf("proto = %s.%s.\n", master_protocol, app_protocol);
 }
 
@@ -97,6 +68,8 @@ static int cb(struct nfq_q_handle *qh, struct nfgenmsg *nfmsg,
     char *app_proto; // e.g. Facebook
     char *master_proto; // e.g. HTTP
     unsigned char *packet_data;
+
+    char src_ip[15], dst_ip[15];
 
     struct nfqnl_msg_packet_hdr *pkt_hdr = nfq_get_msg_packet_hdr(nfa);
     if (pkt_hdr) {
@@ -128,8 +101,37 @@ static int cb(struct nfq_q_handle *qh, struct nfgenmsg *nfmsg,
     master_proto = ndpi_get_proto_name(t_data->workflow->ndpi_struct, proto.master_protocol);
     app_proto = ndpi_get_proto_name(t_data->workflow->ndpi_struct, proto.app_protocol);
 
+    // determine source and destination
+    struct iphdr *ip_info = (struct iphdr *)packet_data;
+    char *src_ip_ptr = inet_ntoa(*((struct in_addr *)&(ip_info->saddr)));
+    strncpy(src_ip, src_ip_ptr, sizeof(src_ip));
+    char *dst_ip_ptr = inet_ntoa(*((struct in_addr *)&(ip_info->daddr)));
+    strncpy(dst_ip, dst_ip_ptr, sizeof(dst_ip));
+
+    unsigned short dst_port;
+    unsigned short src_port;
+    if (ip_info->protocol == IPPROTO_TCP) {
+	struct tcphdr *tcp_info = (struct tcphdr *)(packet_data + sizeof(*ip_info));
+	dst_port = ntohs(tcp_info->dest);
+	src_port = ntohs(tcp_info->source);
+    } else if (ip_info->protocol == IPPROTO_UDP) {
+	struct udphdr *udp_info = (struct udphdr *)(packet_data + sizeof(*ip_info));
+	dst_port = ntohs(udp_info->dest);
+	src_port = ntohs(udp_info->source);
+    } else {
+	dst_port = src_port = 0;
+    }
+
+    // set connlabel
+    /*
+    if ((proto.app_protocol <= 128) && (proto.master_protocol <= 128)) {
+	update_label(src_ip, dst_ip, src_port, dst_port, proto.master_protocol, proto.app_protocol);	
+    }
+    */
+
     if (!Quiet) {
-	print_pkt(t_data->id, nfa, pkt_hdr, master_proto, app_proto);
+	print_pkt(t_data->id, nfa, pkt_hdr, src_ip, dst_ip, src_port, dst_port, 
+		    master_proto, app_proto);
     }
 
     // free idle flows
