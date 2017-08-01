@@ -123,11 +123,12 @@ static int cb(struct nfq_q_handle *qh, struct nfgenmsg *nfmsg,
     }
 
     // set connlabel
-    /*
-    if ((proto.app_protocol <= 128) && (proto.master_protocol <= 128)) {
-	update_label(src_ip, dst_ip, src_port, dst_port, proto.master_protocol, proto.app_protocol);	
+    int is_label_set = 0;
+    if ((proto.app_protocol < 128) && (proto.master_protocol < 128)) {
+	is_label_set = update_label(src_ip, dst_ip, src_port, dst_port, 
+		proto.master_protocol, proto.app_protocol);	
     }
-    */
+   
 
     if (!Quiet) {
 	print_pkt(t_data->id, nfa, pkt_hdr, src_ip, dst_ip, src_port, dst_port, 

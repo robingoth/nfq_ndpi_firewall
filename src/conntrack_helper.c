@@ -46,11 +46,12 @@ int update_label(char *src_ip, char *dst_ip, unsigned short src_port, unsigned s
 
     ret = nfct_query(h, NFCT_Q_UPDATE, ct);
 
-    printf("TEST: update conntrack ");
+    /*
     if (ret == -1)
 	printf("(%d)(%s)\n", ret, strerror(errno));
     else
 	printf("(OK)\n");
+    */
 
     nfct_close(h);
 
