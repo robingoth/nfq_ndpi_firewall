@@ -1,7 +1,6 @@
 #ifndef NDPI_HELPER_H_
 #define NDPI_HELPER_H_
 
-
 #include <ndpi_main.h>
 
 #define SIZEOF_FLOW_STRUCT (sizeof(struct ndpi_flow_struct))
