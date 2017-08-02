@@ -43,7 +43,7 @@ void print_pkt (int tid, struct nfq_data *tb, struct nfqnl_msg_packet_hdr *pkt_h
     int id = 0;
     struct nfqnl_msg_packet_hw *hwph;
 
-    printf("Thread %d: ", tid);
+    t_printf(tid, "");
 
     id = ntohl(pkt_hdr->packet_id);
     printf("id=%u ", id);
@@ -165,7 +165,7 @@ void t_printf(int tid, char *format, ...)
 {
     va_list ap;
     va_start(ap, format);
-    printf("Thread %d: ", tid);
+    printf("Queue %d: ", tid);
     vfprintf(stdout, format, ap);
     va_end(ap);
 }
@@ -342,7 +342,7 @@ int main(int argc, char **argv)
     int i = 0;
     // prepare data for each thread
     for (i = 0; i < NumQueues; i++) {
-	data[i].id = i;
+	data[i].id = i + 10;
 
 	struct ndpi_workflow *workflow = ndpi_calloc(1, sizeof(struct ndpi_workflow));
 	if (workflow == NULL) {
@@ -375,7 +375,7 @@ int main(int argc, char **argv)
 
     // create threads
     for (i = 0; i < NumQueues; i++) {
-	printf("Main: creating thread %d\n", data[i].id);
+	printf("Main: creating thread %d\n", i);
 	rc = pthread_create(&threads[i], NULL, process_thread, &data[i]);
 
 	if (rc) {
