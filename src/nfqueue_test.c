@@ -235,7 +235,7 @@ void display_help()
     printf("NdpiNfqueueFirewall v.%.1f\n\n", VERSION);
 
     printf("Usage:\n");
-    printf("NdpiNfqueueFirewall -n num_of_queues [-rfitFq]\n\n");
+    printf("NdpiNfqueueFirewall [ --option value ]...\n\n");
     
     printf("Options (default values in brackets):\n");
     printf("\t--num-queues\t\t-n\t\tNumber of queues to listen on.(1)\n");
@@ -249,13 +249,24 @@ void display_help()
     printf("\t--help\t\t\t-h\t\tDisplay help message.\n");
 }
 
+void print_setup(){
+    printf("Configuration of this run is the following:\n");
+    printf("\tnumber of queues \t %d\n", NumQueues);
+    printf("\tnumber of roots \t %d\n", NumRoots);
+    printf("\tmaximum flows \t\t %d\n", MaxFlows);
+    printf("\tidle scan period \t %d\n", IdleScanPeriod);
+    printf("\tmaximum idle time \t %d\n", MaxIdleTime);
+    printf("\tmaximum idle flows \t %d\n", MaxIdleFlows);
+    printf("\tquiet \t\t\t %d\n", Quiet);
+}
+
 int main(int argc, char **argv)
 {
     int rc;
     void *status;
     
     if (argc > 14) {
-	printf("Too many arguments.\n");
+	printf("Error: Too many arguments.\n");
 	display_help();
 	exit(1);
     }
@@ -331,6 +342,8 @@ int main(int argc, char **argv)
 	    exit(1);
 	}
     }
+
+    print_setup();
 
     pthread_t threads[NumQueues];
 

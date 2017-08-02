@@ -59,6 +59,16 @@ ndpi_protocol __wrap_ndpi_detection_process_packet()
     return res;
 }
 
+struct flow_info *__wrap_get_flow_info()
+{
+    struct flow_info *ret = malloc(sizeof(struct flow_info));
+    if (ret == NULL) {
+	printf("error during flow allocation");
+    }
+
+    return ret;
+}
+
 /********************/
 
 /* Tests */
@@ -94,7 +104,7 @@ static void detect_protocol_test_success(void **state)
     will_return(__wrap_ndpi_detection_process_packet, 23);
     will_return(__wrap_ndpi_detection_process_packet, 100);
 
-    const unsigned char *packet;
+    const unsigned char *packet; 
     const unsigned short packetlen = 10;
     struct timeval timestamp = { 100, 1000 };
 
@@ -108,12 +118,41 @@ static void detect_protocol_test_success(void **state)
 	memset(ndpi_struct, 0, sizeof(struct ndpi_detection_module_struct));
     }
 
-    ndpi_protocol actual = detect_protocol(packet, packetlen, timestamp, ndpi_struct);
+    struct ndpi_workflow *workflow = ndpi_calloc(1, sizeof(struct ndpi_workflow));
+    if (workflow == NULL) {
+	printf("ERROR: workflow initialization failed");
+	exit(1);
+    }
+
+    workflow->num_roots = 512;
+    workflow->max_flows = 20000000;
+    workflow->max_idle_time = 600;
+
+    workflow->flow_count = 0;
+
+    workflow->ndpi_flows_root = ndpi_calloc(workflow->num_roots, sizeof(void *));
+    if (workflow->ndpi_flows_root == NULL) {
+	printf("ERROR: ndpi_flows_root initialization failed");
+	exit(1);
+    }
+
+    workflow->idle_flows = ndpi_calloc(10, sizeof(struct flow_info *));
+    if (workflow->idle_flows == NULL) {
+	printf("ERROR: idle_flows initialization failed");
+	exit(1);
+    }
+
+    workflow->ndpi_struct = ndpi_struct;	
+
+    ndpi_protocol actual = detect_protocol(packet, packetlen, timestamp, workflow);
 
     assert_int_equal(expected.master_protocol, actual.master_protocol);
     assert_int_equal(expected.app_protocol, actual.app_protocol);
 
     free(ndpi_struct);
+    free(workflow->idle_flows);
+    free(workflow->ndpi_flows_root);
+    free(workflow);
 }
 
 int main(void) {
