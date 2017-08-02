@@ -5,11 +5,6 @@
 
 #define SIZEOF_FLOW_STRUCT (sizeof(struct ndpi_flow_struct))
 #define TICK_RESOLUTION 1000
-#define NUM_ROOTS 512
-#define MAX_FLOWS 200000000 
-#define IDLE_SCAN_PERIOD 10
-#define MAX_IDLE_TIME 600
-#define MAX_IDLE_FLOWS 1024 
 
 // Forward Declarations
 struct flow_info;
@@ -29,11 +24,13 @@ struct ndpi_workflow {
     struct timeval last_idle_scan;
     // timestamp equals to the timestamp of the last packet 
     struct timeval timestamp;
+    // maximum amount of time a flow can be idle
+    int max_idle_time;
 
     // these 2 exist because idle flows cannot be deleted inline,
     // so they are added into a queue and deleted later
     unsigned int num_idle_flows;
-    struct flow_info *idle_flows[MAX_IDLE_FLOWS];
+    struct flow_info **idle_flows;
 };
 
 struct flow_info {

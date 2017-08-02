@@ -284,7 +284,7 @@ static void node_walker(const void *node, ndpi_VISIT which, int depth, void *use
 
     /* Avoid walking the same node multiple times */
     if ((which == ndpi_preorder) || (which == ndpi_leaf)) { 
-	if (flow->last_seen.tv_sec + MAX_IDLE_TIME < workflow->timestamp.tv_sec) {
+	if (flow->last_seen.tv_sec + workflow->max_idle_time < workflow->timestamp.tv_sec) {
 	    free_flow_partially(flow);
 	    workflow->flow_count--;
 

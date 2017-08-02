@@ -145,7 +145,7 @@ static int cb(struct nfq_q_handle *qh, struct nfgenmsg *nfmsg,
 
     // free idle flows
     t_data->workflow->timestamp = tv;
-    if (t_data->workflow->last_idle_scan.tv_sec + IDLE_SCAN_PERIOD < tv.tv_sec) {
+    if (t_data->workflow->last_idle_scan.tv_sec + IdleScanPeriod < tv.tv_sec) {
 	t_data->workflow->last_idle_scan = t_data->workflow->timestamp;
 	free_idle_flows(t_data->workflow);
     }
@@ -260,12 +260,14 @@ int main(int argc, char **argv)
 	exit(1);
     }
 
-    if ((strcmp(argv[1], "-h") == 0) || (strcmp(argv[1], "--help") == 0)) {
-	display_help();
-	exit(0);
-    } else if ((strcmp(argv[1], "-v") == 0) || (strcmp(argv[1], "--version") == 0)) {
-	printf("NdpiNfqueueFirewall version %.1f\n", VERSION);
-	exit(0);
+    if (argc == 2) {
+	if ((strcmp(argv[1], "-h") == 0) || (strcmp(argv[1], "--help") == 0)) {
+    	    display_help();
+    	    exit(0);
+    	} else if ((strcmp(argv[1], "-v") == 0) || (strcmp(argv[1], "--version") == 0)) {
+    	    printf("NdpiNfqueueFirewall version %.1f\n", VERSION);
+    	    exit(0);
+    	}
     }
 
     int a = 1;
@@ -344,17 +346,25 @@ int main(int argc, char **argv)
 
 	struct ndpi_workflow *workflow = ndpi_calloc(1, sizeof(struct ndpi_workflow));
 	if (workflow == NULL) {
-	    printf("ERROR: thread data initialization failed");
+	    printf("ERROR: workflow initialization failed");
 	    exit(1);
 	}
 
 	workflow->num_roots = NumRoots;
 	workflow->max_flows = MaxFlows;
+	workflow->max_idle_time = MaxIdleTime;
+
 	workflow->flow_count = 0;
 
 	workflow->ndpi_flows_root = ndpi_calloc(workflow->num_roots, sizeof(void *));
 	if (workflow->ndpi_flows_root == NULL) {
-	    printf("ERROR: thread data initialization failed");
+	    printf("ERROR: ndpi_flows_root initialization failed");
+	    exit(1);
+	}
+
+	workflow->idle_flows = ndpi_calloc(MaxIdleFlows, sizeof(struct flow_info *));
+	if (workflow->idle_flows == NULL) {
+	    printf("ERROR: idle_flows initialization failed");
 	    exit(1);
 	}
 
