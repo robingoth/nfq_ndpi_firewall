@@ -11,10 +11,12 @@
 #include <linux/types.h>
 #include <linux/netfilter.h>
 #include <libnetfilter_queue/libnetfilter_queue.h>
+#include <libnfnetlink/linux_nfnetlink.h>
 
 #include "ndpi_helper.h"
 
 #define VERSION 1.0
+#define BUFFERSIZE 65535
 
 struct q_data {
     int id;
@@ -33,6 +35,8 @@ int MaxFlows = 200000000;
 int IdleScanPeriod = 10; 
 int MaxIdleTime = 600; 
 int MaxIdleFlows = 1024;
+
+int Errors = 0;
 
 void t_printf(int tid, char *format, ...);
 
@@ -172,8 +176,8 @@ void t_printf(int tid, char *format, ...)
 
 void *process_thread(void *data)
 {
-    int rv;
-    char buf[4096] __attribute__ ((aligned));
+    ssize_t rv;
+    char buf[BUFFERSIZE];
 
     // retrieve thread-specific data
     struct q_data *t_data = (struct q_data *)data;
@@ -190,6 +194,9 @@ void *process_thread(void *data)
 	t_printf(t_data->id, "error during nfq_unbind_pf()\n");
 	exit(1);
     }
+
+    t_printf(t_data->id, "setting buffer size to %d", BUFFERSIZE);
+    nfnl_rcvbufsiz(nfq_nfnlh(t_data->handle), BUFFERSIZE);
 
     t_printf(t_data->id, "binding nfnetlink_queue as nf_queue handler for AF_INET\n");
     if (nfq_bind_pf(t_data->handle, AF_INET) < 0) {
@@ -213,11 +220,38 @@ void *process_thread(void *data)
     t_data->fd = nfq_fd(t_data->handle);
 
     // read packet and process it
-    while ((rv = recv(t_data->fd, buf, sizeof(buf), 0)) && rv >= 0) {
-	pthread_mutex_lock(&mutex_pt);
-	nfq_handle_packet(t_data->handle, buf, rv);
-	pthread_mutex_unlock(&mutex_c);
-	pthread_mutex_unlock(&mutex_pt);
+    while (1) {
+	rv = recv(t_data->fd, buf, BUFFERSIZE, 0);
+	if (rv > 0) {
+            pthread_mutex_lock(&mutex_pt);
+	    nfq_handle_packet(t_data->handle, buf, rv);
+	    pthread_mutex_unlock(&mutex_c);
+	    pthread_mutex_unlock(&mutex_pt);
+	} else {
+	    if (rv < (ssize_t)-1 || rv > (ssize_t)BUFFERSIZE) {
+		errno = EIO;
+		break; /* out of the while (1) loop */
+	    }
+
+	    if (rv== (ssize_t)0) {
+		errno = 0;
+		break; /* No error, just netlink closed. Drop out. */
+	    }
+	    
+	    if (rv == (ssize_t)-1) {
+		if (errno == EINTR || errno == EAGAIN || errno == EWOULDBLOCK) {
+
+		    /* Print overall statistics.
+		     * */
+
+		    continue;
+		} else {
+		    Errors++;
+		    printf("Errors = %d\n", Errors);
+		    break; /* Other errors drop out of the loop. */
+		}
+	    }
+	}
     }
 
     t_printf(t_data->id, "unbinding from queue %d\n", t_data->id);
