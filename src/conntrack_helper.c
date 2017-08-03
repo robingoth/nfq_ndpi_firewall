@@ -10,7 +10,7 @@
 int update_label(char *src_ip, char *dst_ip, unsigned short src_port, unsigned short dst_port, 
 		    int master_proto_id, int app_proto_id)
 {
-    struct nfct_bitmask *a;
+    struct nfct_bitmask *bitmask;
 
     int ret;
     struct nfct_handle *h;
@@ -32,10 +32,10 @@ int update_label(char *src_ip, char *dst_ip, unsigned short src_port, unsigned s
 
     nfct_setobjopt(ct, NFCT_SOPT_SETUP_REPLY);
 
-    a = nfct_bitmask_new(127);
-    nfct_bitmask_set_bit(a, master_proto_id);
-    nfct_bitmask_set_bit(a, app_proto_id);
-    nfct_set_attr(ct, ATTR_CONNLABELS, a);
+    bitmask = nfct_bitmask_new(127);
+    nfct_bitmask_set_bit(bitmask, master_proto_id);
+    nfct_bitmask_set_bit(bitmask, app_proto_id);
+    nfct_set_attr(ct, ATTR_CONNLABELS, bitmask);
 
     h = nfct_open(CONNTRACK, 0);
     if (!h) {
@@ -54,7 +54,6 @@ int update_label(char *src_ip, char *dst_ip, unsigned short src_port, unsigned s
     */
 
     nfct_close(h);
-
     nfct_destroy(ct);
 
     return ret;

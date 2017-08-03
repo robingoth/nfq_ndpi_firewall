@@ -218,6 +218,7 @@ void *process_thread(void *data)
 	exit(1);
     }
     
+    
     t_data->fd = nfq_fd(t_data->handle);
     t_data->nh = nfq_nfnlh(t_data->handle);
     t_data->sockfd = nfnl_fd(t_data->nh);
