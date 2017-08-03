@@ -22,8 +22,10 @@ struct q_data {
     int id;
     struct nfq_handle *handle;
     struct nfq_q_handle *q_handle;
+    struct nfnl_handle *nh;
     struct ndpi_workflow *workflow;
     int fd;
+    int sockfd;
 };
 
 // Globals
@@ -177,6 +179,7 @@ void t_printf(int tid, char *format, ...)
 void *process_thread(void *data)
 {
     ssize_t rv;
+    int opt;
     char buf[BUFFERSIZE];
 
     // retrieve thread-specific data
@@ -195,7 +198,7 @@ void *process_thread(void *data)
 	exit(1);
     }
 
-    t_printf(t_data->id, "setting buffer size to %d", BUFFERSIZE);
+    t_printf(t_data->id, "setting buffer size to %d\n", BUFFERSIZE);
     nfnl_rcvbufsiz(nfq_nfnlh(t_data->handle), BUFFERSIZE);
 
     t_printf(t_data->id, "binding nfnetlink_queue as nf_queue handler for AF_INET\n");
@@ -218,6 +221,14 @@ void *process_thread(void *data)
     }
     
     t_data->fd = nfq_fd(t_data->handle);
+    t_data->nh = nfq_nfnlh(t_data->handle);
+    t_data->sockfd = nfnl_fd(t_data->nh);
+
+    opt = 1;
+    if (setsockopt(t_data->sockfd, SOL_NETLINK, NETLINK_NO_ENOBUFS, 
+		&opt, sizeof(int)) == -1) {
+	printf("ERROR: Can't set netlink enobufs: %s", strerror(errno));
+    }
 
     // read packet and process it
     while (1) {
