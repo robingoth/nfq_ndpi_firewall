@@ -198,8 +198,6 @@ void *process_thread(void *data)
 	exit(1);
     }
 
-    t_printf(t_data->id, "setting buffer size to %d\n", BUFFERSIZE);
-    nfnl_rcvbufsiz(nfq_nfnlh(t_data->handle), BUFFERSIZE);
 
     t_printf(t_data->id, "binding nfnetlink_queue as nf_queue handler for AF_INET\n");
     if (nfq_bind_pf(t_data->handle, AF_INET) < 0) {
@@ -223,7 +221,11 @@ void *process_thread(void *data)
     t_data->fd = nfq_fd(t_data->handle);
     t_data->nh = nfq_nfnlh(t_data->handle);
     t_data->sockfd = nfnl_fd(t_data->nh);
+    
+    t_printf(t_data->id, "setting buffer size to %d\n", BUFFERSIZE);
+    nfnl_rcvbufsiz(t_data->nh, BUFFERSIZE);
 
+    // set socket option NETLINK_NO_ENOBUFS for performance improvement
     opt = 1;
     if (setsockopt(t_data->sockfd, SOL_NETLINK, NETLINK_NO_ENOBUFS, 
 		&opt, sizeof(int)) == -1) {
@@ -241,11 +243,13 @@ void *process_thread(void *data)
 	} else {
 	    if (rv < (ssize_t)-1 || rv > (ssize_t)BUFFERSIZE) {
 		errno = EIO;
+		pthread_mutex_unlock(&mutex_c);
 		break; /* out of the while (1) loop */
 	    }
 
 	    if (rv== (ssize_t)0) {
 		errno = 0;
+		pthread_mutex_unlock(&mutex_c);
 		break; /* No error, just netlink closed. Drop out. */
 	    }
 	    
@@ -254,11 +258,12 @@ void *process_thread(void *data)
 
 		    /* Print overall statistics.
 		     * */
-
+		    pthread_mutex_unlock(&mutex_c);
 		    continue;
 		} else {
 		    Errors++;
 		    printf("Errors = %d\n", Errors);
+		    pthread_mutex_unlock(&mutex_c);
 		    break; /* Other errors drop out of the loop. */
 		}
 	    }
