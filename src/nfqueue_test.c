@@ -128,21 +128,24 @@ static int cb(struct nfq_q_handle *qh, struct nfgenmsg *nfmsg,
 	struct tcphdr *tcp_info = (struct tcphdr *)(packet_data + sizeof(*ip_info));
 	dst_port = ntohs(tcp_info->dest);
 	src_port = ntohs(tcp_info->source);
+
+	// set connlabel
+	if ((proto.app_protocol < 128) && (proto.master_protocol < 128)) {
+	    update_label(src_ip, dst_ip, src_port, dst_port, 
+		    proto.master_protocol, proto.app_protocol, IPPROTO_TCP);	
+	}
     } else if (ip_info->protocol == IPPROTO_UDP) {
 	struct udphdr *udp_info = (struct udphdr *)(packet_data + sizeof(*ip_info));
 	dst_port = ntohs(udp_info->dest);
 	src_port = ntohs(udp_info->source);
+	
+	if ((proto.app_protocol < 128) && (proto.master_protocol < 128)) {
+	    update_label(src_ip, dst_ip, src_port, dst_port, 
+		    proto.master_protocol, proto.app_protocol, IPPROTO_UDP);	
+	}
     } else {
 	dst_port = src_port = 0;
     }
-
-    // set connlabel
-    int is_label_set = 0;
-    if ((proto.app_protocol < 128) && (proto.master_protocol < 128)) {
-	is_label_set = update_label(src_ip, dst_ip, src_port, dst_port, 
-		proto.master_protocol, proto.app_protocol);	
-    }
-   
 
     if (!Quiet) {
 	print_pkt(t_data->id, nfa, pkt_hdr, src_ip, dst_ip, src_port, dst_port, 
@@ -231,6 +234,7 @@ void *process_thread(void *data)
     if (setsockopt(t_data->sockfd, SOL_NETLINK, NETLINK_NO_ENOBUFS, 
 		&opt, sizeof(int)) == -1) {
 	printf("ERROR: Can't set netlink enobufs: %s", strerror(errno));
+	exit(1);
     }
 
     // read packet and process it
@@ -249,16 +253,12 @@ void *process_thread(void *data)
 	    }
 
 	    if (rv== (ssize_t)0) {
-		errno = 0;
 		pthread_mutex_unlock(&mutex_c);
 		break; /* No error, just netlink closed. Drop out. */
 	    }
 	    
 	    if (rv == (ssize_t)-1) {
 		if (errno == EINTR || errno == EAGAIN || errno == EWOULDBLOCK) {
-
-		    /* Print overall statistics.
-		     * */
 		    pthread_mutex_unlock(&mutex_c);
 		    continue;
 		} else {
