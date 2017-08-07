@@ -4,6 +4,9 @@
 #include "ndpi_main.h"
 #include "ndpi_helper.h"
 
+// forward declarations
+static void free_flow_partially(struct flow_info *flow);
+
 /*
  *  Malloc wrapper function.
  */
@@ -111,6 +114,7 @@ get_flow_info(struct ndpi_workflow *workflow, const struct ndpi_iphdr *iph,
 		    u_int16_t ipsize, struct ndpi_id_struct **src,
 		    struct ndpi_id_struct **dst, u_int8_t *proto)
 {
+    struct flow_info flow;
     u_int32_t idx, l4_offset, hashval;
     int l4_packet_len;
     void *search_res;
@@ -142,34 +146,24 @@ get_flow_info(struct ndpi_workflow *workflow, const struct ndpi_iphdr *iph,
 	sport = dport = 0;
     }
 
-    struct flow_info *flow = malloc(sizeof(struct flow_info));
-    if (flow == NULL) {
-	printf("ERROR: flow could be allocated.\n");
-	exit(1);
-    } else {
-	memset(flow, 0, sizeof(struct flow_info));
-    }
-
-    flow->protocol = iph->protocol;
-    flow->src_ip = iph->saddr; 
-    flow->dst_ip = iph->daddr;
-    flow->src_port = htons(sport); 
-    flow->dst_port = htons(dport);
+    flow.protocol = iph->protocol;
+    flow.src_ip = iph->saddr; 
+    flow.dst_ip = iph->daddr;
+    flow.src_port = htons(sport); 
+    flow.dst_port = htons(dport);
     
-    hashval = flow->protocol + flow->src_ip + flow->dst_ip + flow->src_port + flow->dst_port;
-    flow->hash_value = hashval;
+    hashval = flow.protocol + flow.src_ip + flow.dst_ip + flow.src_port + flow.dst_port;
+    flow.hash_value = hashval;
     
     idx = hashval % workflow->num_roots;
     
     // search for a flow in the tree
-    search_res = ndpi_tfind(flow, &workflow->ndpi_flows_root[idx], ndpi_workflow_node_cmp);
+    search_res = ndpi_tfind(&flow, &workflow->ndpi_flows_root[idx], ndpi_workflow_node_cmp);
 
-    struct flow_info *ret;
-    
     if (search_res != NULL) {
 	// flow was found
-	
-	ret = *(struct flow_info**)search_res;
+
+	struct flow_info *ret = *(struct flow_info**)search_res;
 	if(ret->src_ip == iph->saddr && 
 		ret->src_ip == iph->daddr && 
 		ret->dst_port == htons(sport) && 
@@ -180,14 +174,31 @@ get_flow_info(struct ndpi_workflow *workflow, const struct ndpi_iphdr *iph,
 	    *src = ret->dst_id;
 	    *dst = ret->src_id;
 	}
+
+	return ret;
     } else {
 	// create a new flow
 	
 	if (workflow->flow_count > workflow->max_flows) {
 	    printf("ERROR: max number of flows was exceeded.\n");
-	    ret = NULL;
+	    return NULL;
 	} else {
-	    ret = flow;
+	    struct flow_info *ret = malloc(sizeof(struct flow_info));
+
+	    if (ret == NULL) {
+		printf("ERROR: cannot allocate new flow.\n");
+		return NULL;
+	    } else {
+		memset(ret, 0, sizeof(struct flow_info));
+	    }
+
+	    ret->protocol = iph->protocol;
+    	    ret->src_ip = iph->saddr; 
+    	    ret->dst_ip = iph->daddr;
+    	    ret->src_port = htons(sport); 
+    	    ret->dst_port = htons(dport);
+    	    ret->hash_value = hashval;
+
 
 	    ret->ndpi_flow = ndpi_flow_malloc(SIZEOF_FLOW_STRUCT);
 	    if (ret->ndpi_flow == NULL) {
@@ -216,10 +227,10 @@ get_flow_info(struct ndpi_workflow *workflow, const struct ndpi_iphdr *iph,
 
 	    *src = ret->src_id;
 	    *dst = ret->dst_id;
+
+	    return ret;
 	}
     }
-    
-    return ret;
 }
 
 /*
@@ -246,12 +257,12 @@ static void free_flow_partially(struct flow_info *flow) {
  *  Set SSH/SSL specific fields of flow
  */
 static void process_ndpi_collected_info(struct ndpi_workflow * workflow, struct flow_info *flow) {
-    if(!flow->ndpi_flow) {
+    if (flow->ndpi_flow == NULL) {
 	printf("ERROR: flow is NULL \n");
 	exit(1);
     }
 
-    if(flow->detected_protocol.app_protocol != NDPI_PROTOCOL_DNS) {
+    if (flow->detected_protocol.app_protocol != NDPI_PROTOCOL_DNS) {
 	/* SSH */
 	if (flow->detected_protocol.app_protocol == NDPI_PROTOCOL_SSH) {
 	    snprintf(flow->ssh_ssl.client_info, sizeof(flow->ssh_ssl.client_info), "%s",
@@ -269,7 +280,7 @@ static void process_ndpi_collected_info(struct ndpi_workflow * workflow, struct 
 	}
     }
 
-    if(flow->detection_completed) {
+    if (flow->detection_completed) {
 	free_flow_partially(flow);
     }
 }
@@ -340,13 +351,7 @@ detect_protocol(const unsigned char *packet, const unsigned short packetlen,
 
     iph = (struct ndpi_iphdr *) &packet[ip_offset];
 
-    struct flow_info *flow = malloc(sizeof(struct flow_info));
-    if (flow == NULL) {
-	printf("ERROR: flow could be allocated.\n");
-	exit(1);
-    } else {
-	memset(flow, 0, sizeof(struct flow_info));
-    }
+    struct flow_info *flow;
 
     flow = get_flow_info(workflow, iph, packetlen, &src, &dst, &ip_proto);
 
@@ -381,7 +386,10 @@ detect_protocol(const unsigned char *packet, const unsigned short packetlen,
 
 	    process_ndpi_collected_info(workflow, flow);
 	}  
+    } else {
+	free_flow_partially(flow);
     }
+
 
     return flow->detected_protocol;
 }
