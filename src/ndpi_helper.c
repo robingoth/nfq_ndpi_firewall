@@ -347,6 +347,7 @@ detect_protocol(const unsigned char *packet, const unsigned short packetlen,
     struct ndpi_id_struct *src, *dst;
     struct ndpi_flow_struct *ndpi_flow = NULL;
     int ip_offset = 0;
+    int ret;
 
     u_int8_t ip_proto;
 
@@ -373,31 +374,36 @@ detect_protocol(const unsigned char *packet, const unsigned short packetlen,
 				    ndpi_flow, (uint8_t *)iph, packetlen, tick, src, dst);
 	
 	/* stop detection if protocol was determined or number of packets in the flow
-	 * has exceeded specific value 
+	 * has exceeded a specific value 
 	 */
 	if ((flow->detected_protocol.app_protocol != NDPI_PROTOCOL_UNKNOWN) || 
 		((ip_proto == IPPROTO_UDP) && (flow->packets > 8)) || 
-		((ip_proto == IPPROTO_TCP) && (flow->packets > 10))) {
-	    // New protocol detected or give up
-	    flow->detection_completed = 1;
+		((ip_proto == IPPROTO_TCP) && (flow->packets > 10)) ||
+		(flow->label_set == 0)) {
 
 	    //set connlabel
 	    if (ip_proto == IPPROTO_UDP) {
 		if ((flow->detected_protocol.app_protocol < 128) && 
 			(flow->detected_protocol.master_protocol < 128)) {
 		    //printf("flow is UDP, num of pkts = %d\n", flow->packets);
-		    update_label(flow->src_ip, flow->dst_ip, flow->src_port, flow->dst_port, 
-			    flow->detected_protocol.master_protocol + 1, 
-			    flow->detected_protocol.app_protocol + 1, IPPROTO_UDP);
+		    ret = update_label(flow->src_ip, flow->dst_ip, flow->src_port, flow->dst_port, 
+				    flow->detected_protocol.master_protocol + 1, 
+				    flow->detected_protocol.app_protocol + 1, IPPROTO_UDP);
 		}
 	    } else if (ip_proto == IPPROTO_TCP) {
 		if ((flow->detected_protocol.app_protocol < 128) && 
 			(flow->detected_protocol.master_protocol < 128)) {
 		    //printf("flow is TCP, num of pkts = %d\n", flow->packets);
-		    update_label(flow->src_ip, flow->dst_ip, flow->src_port, flow->dst_port, 
-			    flow->detected_protocol.master_protocol + 1, 
-			    flow->detected_protocol.app_protocol + 1, IPPROTO_TCP);
+		    ret = update_label(flow->src_ip, flow->dst_ip, flow->src_port, flow->dst_port, 
+				    flow->detected_protocol.master_protocol + 1, 
+				    flow->detected_protocol.app_protocol + 1, IPPROTO_TCP);
 		}
+	    }
+
+	    if (ret == 0) {
+		// New protocol detected or give up
+		flow->detection_completed = 1;
+		flow->label_set = 1;
 	    }
 
 	    if (flow->detected_protocol.app_protocol == NDPI_PROTOCOL_UNKNOWN) {

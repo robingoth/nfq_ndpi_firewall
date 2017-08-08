@@ -1,4 +1,3 @@
-#include <conntrack_helper.h>
 #include <errno.h>
 #include <inttypes.h>
 #include <pthread.h>

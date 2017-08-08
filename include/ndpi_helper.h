@@ -44,6 +44,7 @@ struct flow_info {
     u_int32_t hash_value;
 
     int detection_completed;
+    int label_set;
     int protocol;
     
     int packets;
