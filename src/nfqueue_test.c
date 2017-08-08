@@ -128,21 +128,10 @@ static int cb(struct nfq_q_handle *qh, struct nfgenmsg *nfmsg,
 	struct tcphdr *tcp_info = (struct tcphdr *)(packet_data + sizeof(*ip_info));
 	dst_port = ntohs(tcp_info->dest);
 	src_port = ntohs(tcp_info->source);
-
-	// set connlabel
-	if ((proto.app_protocol < 128) && (proto.master_protocol < 128)) {
-	    update_label(src_ip, dst_ip, src_port, dst_port, 
-		    proto.master_protocol, proto.app_protocol, IPPROTO_TCP);	
-	}
     } else if (ip_info->protocol == IPPROTO_UDP) {
 	struct udphdr *udp_info = (struct udphdr *)(packet_data + sizeof(*ip_info));
 	dst_port = ntohs(udp_info->dest);
 	src_port = ntohs(udp_info->source);
-	
-	if ((proto.app_protocol < 128) && (proto.master_protocol < 128)) {
-	    update_label(src_ip, dst_ip, src_port, dst_port, 
-		    proto.master_protocol, proto.app_protocol, IPPROTO_UDP);	
-	}
     } else {
 	dst_port = src_port = 0;
     }

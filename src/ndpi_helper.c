@@ -3,6 +3,7 @@
 
 #include "ndpi_main.h"
 #include "ndpi_helper.h"
+#include "conntrack_helper.h"
 
 // forward declarations
 static void free_flow_partially(struct flow_info *flow);
@@ -380,16 +381,32 @@ detect_protocol(const unsigned char *packet, const unsigned short packetlen,
 	    // New protocol detected or give up
 	    flow->detection_completed = 1;
 
+	    //set connlabel
+	    if (ip_proto == IPPROTO_UDP) {
+		if ((flow->detected_protocol.app_protocol < 128) && 
+			(flow->detected_protocol.master_protocol < 128)) {
+		    //printf("flow is UDP, num of pkts = %d\n", flow->packets);
+		    update_label(flow->src_ip, flow->dst_ip, flow->src_port, flow->dst_port, 
+			    flow->detected_protocol.master_protocol + 1, 
+			    flow->detected_protocol.app_protocol + 1, IPPROTO_UDP);
+		}
+	    } else if (ip_proto == IPPROTO_TCP) {
+		if ((flow->detected_protocol.app_protocol < 128) && 
+			(flow->detected_protocol.master_protocol < 128)) {
+		    //printf("flow is TCP, num of pkts = %d\n", flow->packets);
+		    update_label(flow->src_ip, flow->dst_ip, flow->src_port, flow->dst_port, 
+			    flow->detected_protocol.master_protocol + 1, 
+			    flow->detected_protocol.app_protocol + 1, IPPROTO_TCP);
+		}
+	    }
+
 	    if (flow->detected_protocol.app_protocol == NDPI_PROTOCOL_UNKNOWN) {
 		flow->detected_protocol = ndpi_detection_giveup(workflow->ndpi_struct, flow->ndpi_flow);
 	    }
 
 	    process_ndpi_collected_info(workflow, flow);
 	}  
-    } else {
-	free_flow_partially(flow);
     }
-
 
     return flow->detected_protocol;
 }
