@@ -370,48 +370,51 @@ detect_protocol(const unsigned char *packet, const unsigned short packetlen,
 	timestamp.tv_usec / (1000000 / TICK_RESOLUTION);
 
     if(flow->detection_completed == 0) {
+	// attempt to detect a protocol
 	flow->detected_protocol = ndpi_detection_process_packet(workflow->ndpi_struct, 
-				    ndpi_flow, (uint8_t *)iph, packetlen, tick, src, dst);
-	
+				    ndpi_flow, (uint8_t *)iph, packetlen, tick, src, dst);	
 	/* stop detection if protocol was determined or number of packets in the flow
 	 * has exceeded a specific value 
 	 */
 	if ((flow->detected_protocol.app_protocol != NDPI_PROTOCOL_UNKNOWN) || 
 		((ip_proto == IPPROTO_UDP) && (flow->packets > 8)) || 
-		((ip_proto == IPPROTO_TCP) && (flow->packets > 10)) ||
-		(flow->label_set == 0)) {
+		((ip_proto == IPPROTO_TCP) && (flow->packets > 10))) {
 
-	    //set connlabel
-	    if (ip_proto == IPPROTO_UDP) {
-		if ((flow->detected_protocol.app_protocol < 128) && 
-			(flow->detected_protocol.master_protocol < 128)) {
-		    //printf("flow is UDP, num of pkts = %d\n", flow->packets);
-		    ret = update_label(flow->src_ip, flow->dst_ip, flow->src_port, flow->dst_port, 
-				    flow->detected_protocol.master_protocol + 1, 
-				    flow->detected_protocol.app_protocol + 1, IPPROTO_UDP);
-		}
-	    } else if (ip_proto == IPPROTO_TCP) {
-		if ((flow->detected_protocol.app_protocol < 128) && 
-			(flow->detected_protocol.master_protocol < 128)) {
-		    //printf("flow is TCP, num of pkts = %d\n", flow->packets);
-		    ret = update_label(flow->src_ip, flow->dst_ip, flow->src_port, flow->dst_port, 
-				    flow->detected_protocol.master_protocol + 1, 
-				    flow->detected_protocol.app_protocol + 1, IPPROTO_TCP);
-		}
-	    }
-
-	    if (ret == 0) {
-		// New protocol detected or give up
-		flow->detection_completed = 1;
-		flow->label_set = 1;
-	    }
-
+	    flow->detection_completed = 1;
+	    
 	    if (flow->detected_protocol.app_protocol == NDPI_PROTOCOL_UNKNOWN) {
 		flow->detected_protocol = ndpi_detection_giveup(workflow->ndpi_struct, flow->ndpi_flow);
 	    }
 
 	    process_ndpi_collected_info(workflow, flow);
 	}  
+    }
+
+    if ((flow->detection_completed == 1) && (flow->label_set == 0)) {
+	// attempt to set connlabel
+	if (flow->label_set == 0) {
+	    if (ip_proto == IPPROTO_UDP) {
+		if ((flow->detected_protocol.app_protocol < 128) && 
+			(flow->detected_protocol.master_protocol < 128)) {
+		    //printf("flow is UDP, num of pkts = %d\n", flow->packets);
+		    ret = update_label(flow->src_ip, flow->dst_ip, flow->src_port, flow->dst_port, 
+				flow->detected_protocol.master_protocol + 1, 
+		    		flow->detected_protocol.app_protocol + 1, IPPROTO_UDP);
+		}
+	    } else if (ip_proto == IPPROTO_TCP) {
+		if ((flow->detected_protocol.app_protocol < 128) && 
+		    	(flow->detected_protocol.master_protocol < 128)) {
+		    //printf("flow is TCP, num of pkts = %d\n", flow->packets);
+		    ret = update_label(flow->src_ip, flow->dst_ip, flow->src_port, flow->dst_port, 
+		    		    flow->detected_protocol.master_protocol + 1, 
+		    		    flow->detected_protocol.app_protocol + 1, IPPROTO_TCP);
+		}
+	    }
+	
+	    if (ret == 0) {
+		flow->label_set = 1;
+	    }
+	}
     }
 
     return flow->detected_protocol;
