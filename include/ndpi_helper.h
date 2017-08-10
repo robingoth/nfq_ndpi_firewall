@@ -21,10 +21,10 @@ struct ndpi_workflow {
 
     struct ndpi_detection_module_struct *ndpi_struct;
 
-    // when the idle flows were last scanned
-    struct timeval last_idle_scan;
-    // timestamp equals to the timestamp of the last packet 
-    struct timeval timestamp;
+    // when the idle flows were last scanned in ms
+    u_int64_t last_idle_scan;
+    // timestamp equals to the timestamp of the last packet in ms 
+    u_int64_t timestamp;
     // maximum amount of time a flow can be idle
     int max_idle_time;
 
@@ -32,6 +32,7 @@ struct ndpi_workflow {
     // so they are added into a queue and deleted later
     unsigned int num_idle_flows;
     struct flow_info **idle_flows;
+    int idle_scan_idx;
 };
 
 struct flow_info {
@@ -56,7 +57,7 @@ struct flow_info {
     void *src_id;
     void *dst_id;
 
-    struct timeval last_seen;
+    u_int64_t last_seen;
 
     struct {
 	char client_info[48], server_info[48];

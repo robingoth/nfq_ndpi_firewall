@@ -294,18 +294,18 @@ static void node_walker(const void *node, ndpi_VISIT which, int depth, void *use
     struct flow_info *flow = *(struct flow_info **) node;
     struct ndpi_workflow *workflow = (struct ndpi_workflow *)user_data;
 
-    if (workflow->num_idle_flows == workflow->max_idle_flows) {
+    if (workflow->num_idle_flows == workflow->max_idle_flows - 1) {
 	return;
     }
 
     /* Avoid walking the same node multiple times */
     if ((which == ndpi_preorder) || (which == ndpi_leaf)) { 
-	if (flow->last_seen.tv_sec + workflow->max_idle_time < workflow->timestamp.tv_sec) {
+	if (flow->last_seen + workflow->max_idle_time < workflow->timestamp) {
 	    free_flow_partially(flow);
 	    workflow->flow_count--;
 
-	    workflow->num_idle_flows++;
 	    workflow->idle_flows[workflow->num_idle_flows] = flow;
+	    workflow->num_idle_flows++;
 	}
     }
 }
@@ -315,20 +315,23 @@ static void node_walker(const void *node, ndpi_VISIT which, int depth, void *use
  */
 void free_idle_flows(struct ndpi_workflow *workflow) 
 {
-    int i = 0;
-    for (i = 0; i < workflow->num_roots; i++) {
-	ndpi_twalk(workflow->ndpi_flows_root[i], node_walker, workflow);
+    int i = workflow->idle_scan_idx;
+    ndpi_twalk(workflow->ndpi_flows_root[i], node_walker, workflow);
+    
+    while(workflow->num_idle_flows != 0) {
+        workflow->num_idle_flows--;
+        
+        ndpi_tdelete(workflow->idle_flows[workflow->num_idle_flows], 
+        		&workflow->ndpi_flows_root[i], 
+        		ndpi_workflow_node_cmp);
+        
+	free_flow_partially(workflow->idle_flows[workflow->num_idle_flows]);
+        ndpi_free(workflow->idle_flows[workflow->num_idle_flows]);
+    }
 
-	while(workflow->num_idle_flows != 0) {
-    	    ndpi_tdelete(workflow->idle_flows[workflow->num_idle_flows], 
-    	    		&workflow->ndpi_flows_root[i], 
-    	    		ndpi_workflow_node_cmp);
-
-    	    free_flow_partially(workflow->idle_flows[workflow->num_idle_flows]);
-	    ndpi_free(workflow->idle_flows[workflow->num_idle_flows]);
-
-	    workflow->num_idle_flows--;
-    	}
+    workflow->idle_scan_idx++;
+    if(workflow->idle_scan_idx == workflow->num_roots) { 
+	workflow->idle_scan_idx = 0;
     }
 }
 
@@ -355,6 +358,9 @@ detect_protocol(const unsigned char *packet, const unsigned short packetlen,
 
     u_int8_t ip_proto;
 
+    u_int64_t tick = ((uint64_t) timestamp.tv_sec) * TICK_RESOLUTION + 
+	timestamp.tv_usec / (1000000 / TICK_RESOLUTION);
+    
     iph = (struct ndpi_iphdr *) &packet[ip_offset];
 
     struct flow_info *flow;
@@ -364,14 +370,12 @@ detect_protocol(const unsigned char *packet, const unsigned short packetlen,
     if(flow != NULL) {
 	ndpi_flow = flow->ndpi_flow;
 	flow->packets++;
-	flow->last_seen = timestamp;
+	flow->last_seen = tick;
     } else {
 	printf("ERROR: an error occured during get_flow_info.\n");
 	exit(1);
     }
 
-    u_int64_t tick = ((uint64_t) timestamp.tv_sec) * TICK_RESOLUTION + 
-	timestamp.tv_usec / (1000000 / TICK_RESOLUTION);
 
     if(flow->detection_completed == 0) {
 	// attempt to detect a protocol

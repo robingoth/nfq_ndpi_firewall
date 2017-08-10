@@ -33,8 +33,8 @@ int Quiet = 0;
 int NumQueues = 1;
 int NumRoots = 512; 
 int MaxFlows = 200000000;
-int IdleScanPeriod = 10; 
-int MaxIdleTime = 600; 
+int IdleScanPeriod = 100; 
+int MaxIdleTime = 30000; 
 int MaxIdleFlows = 1024;
 
 int Errors = 0;
@@ -141,8 +141,9 @@ static int cb(struct nfq_q_handle *qh, struct nfgenmsg *nfmsg,
     }
 
     // free idle flows
-    t_data->workflow->timestamp = tv;
-    if (t_data->workflow->last_idle_scan.tv_sec + IdleScanPeriod < tv.tv_sec) {
+    t_data->workflow->timestamp = ((uint64_t) tv.tv_sec) * TICK_RESOLUTION + 
+	tv.tv_usec / (1000000 / TICK_RESOLUTION);
+    if (t_data->workflow->last_idle_scan + IdleScanPeriod < t_data->workflow->timestamp) {
 	t_data->workflow->last_idle_scan = t_data->workflow->timestamp;
 	free_idle_flows(t_data->workflow);
     }
@@ -280,8 +281,8 @@ void display_help()
     printf("\t--num-queues\t\t-n\t\tNumber of queues to listen on.(1)\n");
     printf("\t--num-roots\t\t-r\t\tNumber of roots of a binary tree.(512)\n");
     printf("\t--max-flows\t\t-f\t\tMaximum number of flows.(200000000)\n");
-    printf("\t--idle-scan-period\t-i\t\tTime period in seconds of scans for idle flows.(10s)\n");
-    printf("\t--max-idle-time\t\t-t\t\tMaximum amount of time in seconds a flow can be idle.(600)\n");
+    printf("\t--idle-scan-period\t-i\t\tTime period in milliseconds of scans for idle flows.(100ms)\n");
+    printf("\t--max-idle-time\t\t-t\t\tMaximum amount of time in milliseconds a flow can be idle.(30000ms)\n");
     printf("\t--max-idle-flows\t-F\t\tMaximum number of idle flows.(1024)\n");
     printf("\t--quiet\t\t\t-q\t\tQuiet mode.\n");
     printf("\t--version\t\t-v\t\tDisplay version.\n");
