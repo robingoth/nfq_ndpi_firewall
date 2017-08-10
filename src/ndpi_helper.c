@@ -294,6 +294,10 @@ static void node_walker(const void *node, ndpi_VISIT which, int depth, void *use
     struct flow_info *flow = *(struct flow_info **) node;
     struct ndpi_workflow *workflow = (struct ndpi_workflow *)user_data;
 
+    if (workflow->num_idle_flows == workflow->max_idle_flows) {
+	return;
+    }
+
     /* Avoid walking the same node multiple times */
     if ((which == ndpi_preorder) || (which == ndpi_leaf)) { 
 	if (flow->last_seen.tv_sec + workflow->max_idle_time < workflow->timestamp.tv_sec) {

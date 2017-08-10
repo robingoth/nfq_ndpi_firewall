@@ -44,9 +44,6 @@ int update_label(int src_ip, int dst_ip, unsigned short src_port, unsigned short
     nfct_set_attr(ct, ATTR_CONNLABELS, bitmask);
 
     ret = nfct_query(h, NFCT_Q_UPDATE, ct);
-    if (ret != 0) {
-	printf("ERROR: Connlabel was not set. %s\n", strerror(errno));
-    }
 
     nfct_close(h);
     nfct_destroy(ct);

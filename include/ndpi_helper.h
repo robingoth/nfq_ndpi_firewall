@@ -13,6 +13,7 @@ struct flow_info;
 struct ndpi_workflow {
     int num_roots;
     int max_flows;
+    int max_idle_flows;
     int flow_count;
 
     // root of the tree

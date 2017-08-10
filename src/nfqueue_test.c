@@ -414,6 +414,7 @@ int main(int argc, char **argv)
 	    exit(1);
 	}
 
+	workflow->max_idle_flows = MaxIdleFlows;
 	workflow->idle_flows = ndpi_calloc(MaxIdleFlows, sizeof(struct flow_info *));
 	if (workflow->idle_flows == NULL) {
 	    printf("ERROR: idle_flows initialization failed");
