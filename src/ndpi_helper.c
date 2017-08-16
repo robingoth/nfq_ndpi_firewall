@@ -324,9 +324,6 @@ void free_idle_flows(struct ndpi_workflow *workflow)
         ndpi_tdelete(workflow->idle_flows[workflow->num_idle_flows], 
         		&workflow->ndpi_flows_root[i], 
         		ndpi_workflow_node_cmp);
-        
-	free_flow_partially(workflow->idle_flows[workflow->num_idle_flows]);
-        ndpi_free(workflow->idle_flows[workflow->num_idle_flows]);
     }
 
     workflow->idle_scan_idx++;
