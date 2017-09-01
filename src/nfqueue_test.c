@@ -237,23 +237,19 @@ void *process_thread(void *data)
 	} else {
 	    if (rv < (ssize_t)-1 || rv > (ssize_t)BUFFERSIZE) {
 		errno = EIO;
-		pthread_mutex_unlock(&mutex_c);
 		break; /* out of the while (1) loop */
 	    }
 
 	    if (rv== (ssize_t)0) {
-		pthread_mutex_unlock(&mutex_c);
 		break; /* No error, just netlink closed. Drop out. */
 	    }
 	    
 	    if (rv == (ssize_t)-1) {
 		if (errno == EINTR || errno == EAGAIN || errno == EWOULDBLOCK) {
-		    pthread_mutex_unlock(&mutex_c);
 		    continue;
 		} else {
 		    Errors++;
 		    printf("Errors = %d\n", Errors);
-		    pthread_mutex_unlock(&mutex_c);
 		    break; /* Other errors drop out of the loop. */
 		}
 	    }
