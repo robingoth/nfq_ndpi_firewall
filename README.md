@@ -37,7 +37,7 @@ You can start with running `./NdpiNfqueueFirewall --help`.
 Normally you should start with copying [connlabel.conf](./connlabel.conf) file from this repository into `/etc/xtables/`.
 Then there are two options you have: single-queue and multi-queue.
 
-### single queue
+### Single queue
 1. Run `./NdpiNfqueueFirewall`
 2. In another terminal run `iptables -I FORWARD -m connlabel ! --label NDPI_DETECTION_OVER -j NFQUEUE --queue-num 10`. I'm not going to explain how NFQ and CONNTRACK work, but the above command means "enqueue all packets from FORWARD chain that don't have NDPI_DETECTION_OVER label on a connection that they belong to".
 
@@ -56,3 +56,12 @@ For example, you can run `iptables -I FORWARD -m connlabel --label FACEBOOK -j D
 You can also read a [chapter of my thesis](./docs/thesis_chapter_l7firewall.pdf) for more details.
 
 ## Limitations
+**CONNTRACK** supports only 128 unique labels, so for now NdpiNfqFirewall can label only 128 first protocols from [nDPI source files](https://github.com/ntop/nDPI/blob/2.0-stable/src/include/ndpi_protocol_ids.h).
+
+If you want to increase this number you have to patch you Linux core by changing *XT CONNLABEL MAXBIT* value in [include/uapi/linux/netfilter/xt_connlabel.h](https://github.com/torvalds/linux/blob/master/include/uapi/linux/netfilter/xt_connlabel.h) file to a higher one.
+
+## Future work/features
+- Automated tests.
+- Recover NFQ socket connection in case it fails.
+- Bind to custom queues. Now queues start from 10 and end with 10+n-1 where *n* is number of queues 
+- Possibility to choose a subset of protocols to be labeled. Instead of 128 first protocols from ndpi sources user should be able to choose any 128 protocols form the list.
