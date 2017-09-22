@@ -65,3 +65,6 @@ If you want to increase this number you have to patch you Linux core by changing
 - Recover NFQ socket connection in case it fails.
 - Bind to custom queues. Now queues start from 10 and end with 10+n-1 where *n* is number of queues 
 - Possibility to choose a subset of protocols to be labeled. Instead of 128 first protocols from ndpi sources user should be able to choose any 128 protocols form the list.
+
+## Contact developer
+Did you like it? Drop me an email (vlad.cherednychenko@gmail.com) if you started using it, have any questions or it inspired you to write a tool of your own.
