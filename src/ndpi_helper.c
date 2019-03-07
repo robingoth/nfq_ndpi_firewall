@@ -5,6 +5,9 @@
 #include "ndpi_helper.h"
 #include "conntrack_helper.h"
 
+/** User preferences **/
+u_int8_t enable_protocol_guess = 1;
+
 // forward declarations
 static void free_flow_partially(struct flow_info *flow);
 
@@ -274,10 +277,10 @@ static void process_ndpi_collected_info(struct ndpi_workflow * workflow, struct 
 	} else if ((flow->detected_protocol.app_protocol == NDPI_PROTOCOL_SSL) || 
 		(flow->detected_protocol.master_protocol == NDPI_PROTOCOL_SSL)) {
 	    snprintf(flow->ssh_ssl.client_info, sizeof(flow->ssh_ssl.client_info), "%s",
-		    flow->ndpi_flow->protos.ssl.client_certificate);
+        flow->ndpi_flow->protos.stun_ssl.ssl.client_certificate);
 
 	    snprintf(flow->ssh_ssl.server_info, sizeof(flow->ssh_ssl.server_info), "%s",
-		    flow->ndpi_flow->protos.ssl.server_certificate);
+		    flow->ndpi_flow->protos.stun_ssl.ssl.server_certificate);
 	}
     }
 
@@ -388,7 +391,7 @@ detect_protocol(const unsigned char *packet, const unsigned short packetlen,
 	    flow->detection_completed = 1;
 	    
 	    if (flow->detected_protocol.app_protocol == NDPI_PROTOCOL_UNKNOWN) {
-		flow->detected_protocol = ndpi_detection_giveup(workflow->ndpi_struct, flow->ndpi_flow);
+		flow->detected_protocol = ndpi_detection_giveup(workflow->ndpi_struct, flow->ndpi_flow, enable_protocol_guess);
 	    }
 
 	    process_ndpi_collected_info(workflow, flow);

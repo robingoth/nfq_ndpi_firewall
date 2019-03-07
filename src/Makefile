@@ -13,10 +13,10 @@ PROGRAMNAME = NdpiNfqueueFirewall
 NH_TESTS = NdpiHelperTests
 
 CC=gcc
-CFLAGS= -Wall -g -I$(INCDIR) -I$(NDPIDIR)/src/include $(LIBSDIR)/nDPI/lib/libndpi.a
+CFLAGS= -Wall -g -I$(INCDIR) -I$(NDPIDIR)/src/include $(LIBSDIR)/nDPI/src/lib/libndpi.a
 CFLAGS2 = -Wall -g -I$(INCDIR) -L/usr/local/lib 
 
-TESTS_CFLAGS = -g -Wall -I$(INCDIR) -I$(NDPIDIR)/src/include -L/usr/local/lib $(LIBSDIR)/nDPI/lib/libndpi.a
+TESTS_CFLAGS = -g -Wall -I$(INCDIR) -I$(NDPIDIR)/src/include -L/usr/local/lib $(LIBSDIR)/nDPI/src/lib/libndpi.a
 NH_WRAPS = -Wl,--wrap=set_ndpi_malloc,--wrap=set_ndpi_free,--wrap=set_ndpi_flow_malloc,--wrap=set_ndpi_flow_free,--wrap=ndpi_init_detection_module,--wrap=NDPI_BITMASK_SET_ALL,--wrap=ndpi_set_protocol_detection_bitmask2,--wrap=ndpi_detection_process_packet,--wrap=get_flow_info
 
 LIBS = -lndpi -lnetfilter_queue -lpthread -lnetfilter_conntrack -lnfnetlink
