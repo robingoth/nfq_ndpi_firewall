@@ -13,8 +13,9 @@ PROGRAMNAME = NdpiNfqueueFirewall
 NH_TESTS = NdpiHelperTests
 
 CC=gcc
-CFLAGS= -Wall -g -I$(INCDIR) -I$(NDPIDIR)/src/include $(LIBSDIR)/nDPI/src/lib/libndpi.a
-CFLAGS2 = -Wall -g -I$(INCDIR) -L/usr/local/lib 
+CFLAGS= -Wall -g -I$(INCDIR) -I$(NDPIDIR)/src/include
+CFLAGS2 = -Wall -g -I$(INCDIR) -L/usr/local/lib
+LIBNDPI= $(LIBSDIR)/nDPI/src/lib/libndpi.a
 
 TESTS_CFLAGS = -g -Wall -I$(INCDIR) -I$(NDPIDIR)/src/include -L/usr/local/lib $(LIBSDIR)/nDPI/src/lib/libndpi.a
 NH_WRAPS = -Wl,--wrap=set_ndpi_malloc,--wrap=set_ndpi_free,--wrap=set_ndpi_flow_malloc,--wrap=set_ndpi_flow_free,--wrap=ndpi_init_detection_module,--wrap=NDPI_BITMASK_SET_ALL,--wrap=ndpi_set_protocol_detection_bitmask2,--wrap=ndpi_detection_process_packet,--wrap=get_flow_info
@@ -42,7 +43,7 @@ $(OBJDIR)/%.o: $(TESTSDIR)/%.c $(DEPS)
 all: $(PROGRAMNAME) 
 
 $(PROGRAMNAME): $(OBJS) 
-	$(CC) -o $@ $^ $(CFLAGS) $(LIBS)
+	$(CC) -o $@ $^ $(CFLAGS) $(LIBNDPI) $(LIBS)
 
 $(NH_TESTS): $(OBJS_NH_TESTS)
 	$(CC) -o $(TESTSDIR)/$@ $^ $(TESTS_CFLAGS) $(NH_WRAPS) $(TESTLIBS) 
