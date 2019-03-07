@@ -3,7 +3,6 @@
 
 #include <ndpi_main.h>
 
-#define SIZEOF_FLOW_STRUCT (sizeof(struct ndpi_flow_struct))
 #define TICK_RESOLUTION 1000
 
 // Forward Declarations
