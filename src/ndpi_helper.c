@@ -1,12 +1,10 @@
 #include <stdio.h>
 #include <stdlib.h>
 
-#include "ndpi_main.h"
+#include <ndpi_main.h>
 #include "ndpi_helper.h"
-#include "conntrack_helper.h"
 
-/** User preferences **/
-u_int8_t enable_protocol_guess = 1;
+extern u_int8_t enable_protocol_guess;
 
 // forward declarations
 static void free_flow_partially(struct flow_info *flow);

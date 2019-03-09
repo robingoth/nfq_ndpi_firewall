@@ -7,7 +7,7 @@
 #include <libnetfilter_conntrack/libnetfilter_conntrack.h>
 #include <libnetfilter_conntrack/libnetfilter_conntrack_tcp.h>
 
-int update_label(int src_ip, int dst_ip, unsigned short src_port, unsigned short dst_port, 
+int update_label(int src_ip, int dst_ip, unsigned short src_port, unsigned short dst_port,
     int master_proto_id, int app_proto_id, int l4_proto)
 {
   struct nfct_bitmask *bitmask;

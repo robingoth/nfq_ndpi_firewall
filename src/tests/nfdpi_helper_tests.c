@@ -6,7 +6,7 @@
 #include <cmocka.h>
 #include <string.h>
 
-#include "ndpi_helper.h"
+#include "../ndpi_helper.h"
 #include "ndpi_main.h"
 
 /* Wrap functions */

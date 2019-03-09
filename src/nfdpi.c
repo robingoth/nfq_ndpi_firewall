@@ -6,6 +6,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <unistd.h>
+#include <getopt.h>
 #include <netinet/in.h>
 #include <linux/types.h>
 #include <linux/netfilter.h>
@@ -14,8 +15,9 @@
 
 #include "ndpi_helper.h"
 
-#define VERSION 2.0
+#define VERSION "2.0"
 #define BUFFERSIZE 65535
+#define MAX_NUM_QUEUES 10
 
 struct q_data {
   int id;
@@ -29,14 +31,18 @@ struct q_data {
 
 // Globals
 pthread_mutex_t mutex, mutex_c, mutex_pt;
+static char *QueueNum[MAX_NUM_QUEUES];
+int QueueSize = 0;
 int Quiet = 0;
-int NumQueues = 1;
 int NumRoots = 512; 
 int MaxFlows = 200000000;
 int IdleScanPeriod = 100; 
 int MaxIdleTime = 30000; 
 int MaxIdleFlows = 1024;
 int Errors = 0;
+/** User preferences **/
+u_int8_t enable_protocol_guess = 1;
+
 
 void t_printf(int tid, char *format, ...);
 
@@ -263,27 +269,9 @@ void *process_thread(void *data){
   return NULL;
 }
 
-void display_help(){
-  printf("NdpiNfqueueFirewall v.%.1f\n\n", VERSION);
-
-  printf("Usage:\n");
-  printf("NdpiNfqueueFirewall [ --option value ]...\n\n");
-
-  printf("Options (default values in brackets):\n");
-  printf("\t--num-queues\t\t-n\t\tNumber of queues to listen on.(1)\n");
-  printf("\t--num-roots\t\t-r\t\tNumber of roots of a binary tree.(512)\n");
-  printf("\t--max-flows\t\t-f\t\tMaximum number of flows.(200000000)\n");
-  printf("\t--idle-scan-period\t-i\t\tTime period in milliseconds of scans for idle flows.(100ms)\n");
-  printf("\t--max-idle-time\t\t-t\t\tMaximum amount of time in milliseconds a flow can be idle.(30000ms)\n");
-  printf("\t--max-idle-flows\t-F\t\tMaximum number of idle flows.(1024)\n");
-  printf("\t--quiet\t\t\t-q\t\tQuiet mode.\n");
-  printf("\t--version\t\t-v\t\tDisplay version.\n");
-  printf("\t--help\t\t\t-h\t\tDisplay help message.\n");
-}
-
 void print_setup(){
   printf("Configuration of this run is the following:\n");
-  printf("\tnumber of queues \t %d\n", NumQueues);
+  printf("\tnumber of queues \t %d\n", QueueSize);
   printf("\tnumber of roots \t %d\n", NumRoots);
   printf("\tmaximum flows \t\t %d\n", MaxFlows);
   printf("\tidle scan period \t %d\n", IdleScanPeriod);
@@ -292,101 +280,140 @@ void print_setup(){
   printf("\tquiet \t\t\t %d\n", Quiet);
 }
 
+static void printVersion(){
+  printf("Welcome to nfdpi %s with nDPI %s.\n", VERSION, ndpi_revision());
+}
+
+/**
+ * Print help instructions
+ */
+static void help(u_int long_help) {
+  printVersion();
+
+  printf("\nnfdpi -q <queue num> -q <queue num>\n\n"
+   "Usage:\n"
+   "  -q <queue num>            | Specify a number of queue to read packets from. Example -q 10 -q 11 -q 30. Limited in 10 queues.\n"
+   "  -r <num roots>            | Number of roots of a binary tree. Default: 512.\n"
+   "  -f <max flows>            | Maximum number of flows. Default: 200000000.\n"
+   "  -i <num ms>               | Time period in milliseconds of scans for idle flows. Default: 100 ms.\n"
+   "  -t <num ms>               | Maximum amount of time in milliseconds a flow can be idle. Default: 30000 ms.\n"
+   "  -F <num idle flows>       | Maximum number of idle flows. Default: 1024.\n"
+   "  -Q                        | Quiet mode.\n"
+   "  -v                        | Display version.\n"
+   "  -h                        | Display this help.\n");
+
+  exit(!long_help);
+}
+
+static struct option longopts[] = {
+  { "enable-protocol-guess", no_argument, NULL, 'd'},
+  { "queue",                 required_argument, NULL, 'q'},
+  { "num-roots",             required_argument, NULL, 'r'},
+  { "max-idle-flows",        required_argument, NULL, 'F'},
+  { "max-flows",             required_argument, NULL, 'f'},
+  { "idle-scan-period",      required_argument, NULL, 'i'},
+  { "max-idle-time",         required_argument, NULL, 't'},
+  { "version",               no_argument, NULL, 'v'},
+  { "version",               no_argument, NULL, 'V'},
+  { "help",                  no_argument, NULL, 'h'},
+  { "quiet",                 no_argument, NULL, 'Q'},
+  { 0,                       0,           0,     0}
+};
+
+/**
+ * Option parser
+ */
+static void parseOptions(int argc, char **argv) {
+  int option_idx = 0;//, do_capture = 0;
+  int opt;
+  char* endptr;
+
+  while((opt = getopt_long(argc, argv, "dq:r:F:f:i:t:QvVh", longopts, &option_idx)) != EOF) {
+    switch (opt) {
+      case 'd':
+        enable_protocol_guess = 0;
+        break;
+      case 'q':
+        QueueNum[QueueSize++] = optarg;
+        break;
+      case 'r':
+        NumRoots = strtoimax(optarg, &endptr, 10);
+        break;
+      case 'F':
+        MaxIdleFlows = strtoimax(optarg, &endptr, 10);
+        break;
+      case 'f':
+        MaxFlows = strtoimax(optarg, &endptr, 10);
+        break;
+      case 'i':
+        IdleScanPeriod = strtoimax(optarg, &endptr, 10);
+        break;
+      case 't':
+        MaxIdleTime = strtoimax(optarg, &endptr, 10);
+        break;
+      case 'Q':
+        Quiet = 1;
+        break;
+      case 'v':
+      case 'V':
+        printVersion();
+        exit(0);
+        break;
+      case 'h':
+        help(1);
+        break;
+      default:
+        help(0);
+        break;
+    }
+  }
+
+  // check parameters
+  if(QueueNum[0] == NULL || strcmp(QueueNum[0], "") == 0 || QueueSize > MAX_NUM_QUEUES) {
+    help(1);
+  }
+  if (MaxIdleFlows <= 0){
+    printf("Error: max-idle-flows has not a valid value.\n\n");
+    help(1);
+  }
+  if (MaxIdleTime <= 0){
+    printf("Error: max-idle-time has not a valid value.\n\n");
+    help(1);
+  }
+  if (IdleScanPeriod <= 0){
+    printf("Error: idle-scan-period has not a valid value.\n\n");
+    help(1);
+  }
+  if (MaxFlows <= 0){
+    printf("Error: max-flows has not a valid value.\n\n");
+    help(1);
+  }
+  if (NumRoots <= 0){
+    printf("Error: num-roots has not a valid value.\n\n");
+    help(1);
+  }
+}
+
 int main(int argc, char **argv){
+
+  parseOptions(argc, argv);
+
   int rc;
   void *status;
 
-  if (argc > 14) {
-    printf("Error: Too many arguments.\n");
-    display_help();
-    exit(1);
-  }
-
-  if (argc == 2) {
-    if ((strcmp(argv[1], "-h") == 0) || (strcmp(argv[1], "--help") == 0)) {
-      display_help();
-      exit(0);
-    } else if ((strcmp(argv[1], "-v") == 0) || (strcmp(argv[1], "--version") == 0)) {
-      printf("NdpiNfqueueFirewall version %.1f\n", VERSION);
-      exit(0);
-    }
-  }
-
-  int a = 1;
-  char *endptr;
-  errno = 0;
-  while (a < argc) {
-    if ((strcmp(argv[a], "-n") == 0) || (strcmp(argv[a], "--num-queues") == 0)) {
-      // set num queues
-      NumQueues = strtoimax(argv[a + 1], &endptr, 10);
-      if ((errno != 0) || (NumQueues <= 0)) {
-        printf("ERROR: %s is not a valid value.\n", argv[a + 1]);
-        exit(1);
-      }
-      a += 2;
-    } else if ((strcmp(argv[a], "-r") == 0) || (strcmp(argv[a], "--num-roots") == 0)) {
-      // set num roots
-      NumRoots = strtoimax(argv[a + 1], &endptr, 10);
-      if ((errno != 0) || (NumRoots <= 0)) {
-        printf("ERROR: %s is not a valid value.\n", argv[a + 1]);
-        exit(1);
-      }
-      a += 2;
-    } else if ((strcmp(argv[a], "-f") == 0) || (strcmp(argv[a], "--max-flows") == 0)) {
-      // set max flows
-      MaxFlows = strtoimax(argv[a + 1], &endptr, 10);
-      if ((errno != 0) || (MaxFlows <= 0)) {
-        printf("ERROR: %s is not a valid value.\n", argv[a + 1]);
-        exit(1);
-      }
-      a += 2;
-    } else if ((strcmp(argv[a], "-i") == 0) || (strcmp(argv[a], "--idle-scan-period") == 0)) {
-      // set idle scan period
-      IdleScanPeriod = strtoimax(argv[a + 1], &endptr, 10);
-      if ((errno != 0) || (IdleScanPeriod <= 0)) {
-        printf("ERROR: %s is not a valid value.\n", argv[a + 1]);
-        exit(1);
-      }
-      a += 2;
-    } else if ((strcmp(argv[a], "-t") == 0) || (strcmp(argv[a], "--max-idle-time") == 0)) {
-      // set max idle time
-      MaxIdleTime = strtoimax(argv[a + 1], &endptr, 10);
-      if ((errno != 0) || (MaxIdleTime <= 0)) {
-        printf("ERROR: %s is not a valid value.\n", argv[a + 1]);
-        exit(1);
-      }
-      a += 2;
-    } else if ((strcmp(argv[a], "-F") == 0) || (strcmp(argv[a], "--max-idle-flows") == 0)) {
-      // set max idle flows
-      MaxIdleFlows = strtoimax(argv[a + 1], &endptr, 10);
-      if ((errno != 0) || (MaxIdleFlows <= 0)) {
-        printf("ERROR: %s is not a valid value.\n", argv[a + 1]);
-        exit(1);
-      }
-      a += 2;
-    } else if ((strcmp(argv[a], "-q") == 0) || (strcmp(argv[a], "--quiet") == 0)) {
-      Quiet = 1;
-      a += 1;
-    } else {
-      printf("ERROR: %s is not a valid argument.\n", argv[a]);
-      display_help();
-      exit(1);
-    }
-  }
-
   print_setup();
 
-  pthread_t threads[NumQueues];
+  pthread_t threads[QueueSize];
 
   pthread_mutex_init(&mutex_c, NULL);
   pthread_mutex_init(&mutex_pt, NULL);
 
-  struct q_data data[NumQueues];
+  struct q_data data[QueueSize];
 
   int i = 0;
   // prepare data for each thread
-  for (i = 0; i < NumQueues; i++) {
-    data[i].id = i + 10;
+  for (i = 0; i < QueueSize; i++) {
+    data[i].id = atoi(QueueNum[i]);
 
     struct ndpi_workflow *workflow = ndpi_calloc(1, sizeof(struct ndpi_workflow));
     if (workflow == NULL) {
@@ -419,7 +446,7 @@ int main(int argc, char **argv){
   }
 
   // create threads
-  for (i = 0; i < NumQueues; i++) {
+  for (i = 0; i < QueueSize; i++) {
     printf("Main: creating thread %d\n", i);
     rc = pthread_create(&threads[i], NULL, process_thread, &data[i]);
 
@@ -429,7 +456,7 @@ int main(int argc, char **argv){
     }
   }
 
-  for (i = 0; i < NumQueues; i++) {
+  for (i = 0; i < QueueSize; i++) {
     rc = pthread_join(threads[i], &status);
     if (rc) {
       printf("ERROR; return code from pthread_join() is %d\n", rc);
