@@ -1,5 +1,5 @@
 # NFDPI
-It is a user-space deep packet inspection tool capable of detecting and blocking of 227 application protocols.
+It is a user-space deep packet inspection tool capable of detecting and blocking of 242 application protocols.
 
 ## Why
 So far there is a lack of open-source DPI tools that allow users to block packets coming from specific application.
@@ -27,7 +27,7 @@ This program is a PoC, so don't expect too much.
 - install libnetfilter_queue and libnetfilter_conntrack (for Ubuntu should be possible with `apt-get install`)
 - `git clone https://github.com/fabiodepin/nfq_ndpi_firewall.git`
 - `cd nfq_ndpi_firewall/lib`
-- download and compile nDPI like described [here](https://github.com/ntop/nDPI/blob/2.0-stable/INSTALL)
+- download and compile and install nDPI like described [here](https://github.com/ntop/nDPI/blob/2.8-stable/INSTALL)
 - `cd /path-to-ndpi-nfq-firewall/src/`
 - `make`
 
