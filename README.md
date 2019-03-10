@@ -41,7 +41,7 @@ Then there are two options you have: single-queue and multi-queue.
 2. In another terminal run `iptables -I FORWARD -m connlabel ! --label NDPI-DETECTION-OVER -j NFQUEUE --queue-num 10`. I'm not going to explain how NFQ and CONNTRACK work, but the above command means "enqueue all packets from FORWARD chain that don't have NDPI-DETECTION-OVER label on a connection that they belong to".
 
 ### Multiple queues (4)
-1. Run `./ndpi -q 10 -q 11 -q 12 -q 13`
+1. Run `./nfdpi -q 10 -q 11 -q 12 -q 13`
 2. In another terminal run `iptables -I FORWARD -m connlabel ! --label NDPI-DETECTION-OVER -j NFQUEUE --queue-balance 10:13`
 
 ### Manipulating packets
