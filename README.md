@@ -12,7 +12,7 @@ This program is a PoC, so don't expect too much.
 
 ## Features
 1. Processing packets from multiple queues (one queue per thread)
-2. Detection of 227 supported protocols (full list can be found on [nDPI web page](http://www.ntop.org/products/deep-packet-inspection/ndpi/)).
+2. Detection of 242 supported protocols (full list can be found on [nDPI web page](http://www.ntop.org/products/deep-packet-inspection/ndpi/)).
 3. Labeling connections for which the protocol detection has ended in Linux's connection tracking subsystem.
 4. Periodic memory cleanup based on time flows have been idle.
 5. Fully configurable parameters from the command line.
@@ -25,14 +25,14 @@ This program is a PoC, so don't expect too much.
 
 ## Installation
 - install libnetfilter_queue and libnetfilter_conntrack (for Ubuntu should be possible with `apt-get install`)
-- `git clone https://github.com/robingoth/nfq_ndpi_firewall.git`
+- `git clone https://github.com/fabiodepin/nfq_ndpi_firewall.git`
 - `cd nfq_ndpi_firewall/lib`
 - download and compile nDPI like described [here](https://github.com/ntop/nDPI/blob/2.0-stable/INSTALL)
 - `cd /path-to-ndpi-nfq-firewall/src/`
 - `make`
 
 ## Usage
-You can start with running `./ndpi --help`.
+You can start with running `./nfdpi --help`.
 Normally you should start with copying [connlabel.conf](./connlabel.conf) file from this repository into `/etc/xtables/`.
 Then there are two options you have: single-queue and multi-queue.
 
@@ -50,12 +50,12 @@ After you have launched the program nfdpi will start labeling connections in con
 For example, you can run `iptables -I FORWARD -m connlabel --label FACEBOOK -j DROP` in case you want to drop packets coming from facebook web site. You can substitute "FACEBOOK" with any other protocol from your *connlabel.conf* file.
 
 ## How does it work
-![alt text](https://github.com/robingoth/nfq_ndpi_firewall/blob/master/docs/workflow.png "nfdpi Workflow")
+![alt text](https://github.com/fabiodepin/nfq_ndpi_firewall/blob/master/docs/workflow.png "nfdpi Workflow")
 
 You can also read a [chapter of my thesis](./docs/thesis_chapter_l7firewall.pdf) for more details.
 
 ## Limitations
-**CONNTRACK** supports only 128 unique labels, so for now nfdpi can label only 128 first protocols from [nDPI source files](https://github.com/ntop/nDPI/blob/2.0-stable/src/include/ndpi_protocol_ids.h).
+**CONNTRACK** supports only 128 unique labels, so for now nfdpi can label only 128 first protocols from [nDPI source files](https://github.com/ntop/nDPI/blob/2.8-stable/src/include/ndpi_protocol_ids.h).
 
 If you want to increase this number you have to patch your Linux core by changing *XT CONNLABEL MAXBIT* value in [include/uapi/linux/netfilter/xt_connlabel.h](https://github.com/torvalds/linux/blob/master/include/uapi/linux/netfilter/xt_connlabel.h) file to a higher one.
 
