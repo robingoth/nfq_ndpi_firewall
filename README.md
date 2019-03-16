@@ -22,12 +22,14 @@ This program is a PoC, so don't expect too much.
 - nDPI 2.8
 - libnetfilter_queue
 - libnetfilter_conntrack
+- JSON-C
 
 ## Installation
 - install libnetfilter_queue and libnetfilter_conntrack (for Ubuntu should be possible with `apt-get install`)
 - `git clone https://github.com/fabiodepin/nfq_ndpi_firewall.git`
 - `cd nfq_ndpi_firewall/lib`
 - download and compile and install nDPI like described [here](https://github.com/ntop/nDPI/blob/2.8-stable/INSTALL)
+- download and compile and install json-c like described [here](https://github.com/json-c/json-c/blob/master/README.md)
 - `cd /path-to-ndpi-nfq-firewall/src/`
 - `make`
 
@@ -60,7 +62,11 @@ You can also read a [chapter of my thesis](./docs/thesis_chapter_l7firewall.pdf)
 If you want to increase this number you have to patch your Linux core by changing *XT CONNLABEL MAXBIT* value in [include/uapi/linux/netfilter/xt_connlabel.h](https://github.com/torvalds/linux/blob/master/include/uapi/linux/netfilter/xt_connlabel.h) file to a higher one.
 
 ## Future work/features
-- Automated tests.
+- Check SSL detections methods...
+- Mode NF_REPEAT with MARK/MASK or NF_ACCEPT.
+- MARK/MASK with Protocol ID.
+- Remove mode label.
 - Recover NFQ socket connection in case it fails.
 - Possibility to choose a subset of protocols to be labeled. Instead of 128 first protocols from ndpi sources user should be able to choose any 128 protocols form the list.
+- Automated tests.
 
