@@ -328,7 +328,6 @@ void free_idle_flows(struct ndpi_workflow *workflow) {
   }
 }
 
-
 /*
  *  Detect protocol.
  *  Input arguments:
@@ -339,7 +338,7 @@ void free_idle_flows(struct ndpi_workflow *workflow) {
  *
  *  Returns a structure containing master_proto, app_proto
  */
-  struct ndpi_proto 
+struct flow_info*
 detect_protocol(const unsigned char *packet, const unsigned short packetlen,
     struct timeval timestamp, struct ndpi_workflow *workflow)
 {
@@ -410,7 +409,7 @@ detect_protocol(const unsigned char *packet, const unsigned short packetlen,
     }
   }
 
-  return flow->detected_protocol;
+  return flow;
 }
 
 /*

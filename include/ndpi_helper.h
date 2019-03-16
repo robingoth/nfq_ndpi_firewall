@@ -66,7 +66,7 @@ struct flow_info {
 // FUNCTIONS
 struct ndpi_detection_module_struct *setup_detection();
 
-struct ndpi_proto detect_protocol(const unsigned char *packet, 
+struct flow_info* detect_protocol(const unsigned char *packet,
 			const unsigned short packetlen, 
 			struct timeval timestamp,  
 			struct ndpi_workflow *workflow);

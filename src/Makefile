@@ -4,7 +4,7 @@ CC=gcc
 LINC = ../include
 LIBNDPI = ../lib/nDPI/src/lib/libndpi.a
 CFLAGS = -Wall -g -I../lib/nDPI/src/include -I$(LINC)
-LFLAGS = -lndpi -lnetfilter_queue -lpthread -lnetfilter_conntrack -lnfnetlink
+LFLAGS = -lndpi -lnetfilter_queue -lpthread -lnetfilter_conntrack -lnfnetlink -ljson
 
 PNAME = nfdpi
 OBJ = ./obj

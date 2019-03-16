@@ -7,6 +7,7 @@
 #include <string.h>
 #include <unistd.h>
 #include <getopt.h>
+#include <json-c/json.h>
 #include <netinet/in.h>
 #include <linux/types.h>
 #include <linux/netfilter.h>
@@ -43,53 +44,132 @@ int Errors = 0;
 /** User preferences **/
 u_int8_t enable_protocol_guess = 1;
 
-
 void t_printf(int tid, char *format, ...);
 
-void print_pkt (int tid, struct nfq_data *tb, struct nfqnl_msg_packet_hdr *pkt_hdr, 
-    char *src_ip, char *dst_ip, unsigned short src_port, unsigned short dst_port,
-    char *master_protocol, char *app_protocol)
-{
-  int id = 0;
-  struct nfqnl_msg_packet_hw *hwph;
+/**
+ * From IPPROTO to string NAME
+ */
+static char* ipProto2Name(u_int16_t proto_id) {
+  static char proto[8];
 
-  t_printf(tid, "");
-
-  id = ntohl(pkt_hdr->packet_id);
-  printf("id=%u ", id);
-
-  hwph = nfq_get_packet_hw(tb);
-  if (hwph) {
-    int i, hlen = ntohs(hwph->hw_addrlen);
-
-    printf("he_src_addr=");
-    for (i = 0; i < hlen-1; i++) {
-      printf("%02x:", hwph->hw_addr[i]);
-    }
-    printf("%02x ", hwph->hw_addr[hlen - 1]);
+  switch(proto_id) {
+    case IPPROTO_TCP:
+      return("TCP");
+      break;
+    case IPPROTO_UDP:
+      return("UDP");
+      break;
+    case IPPROTO_ICMP:
+      return("ICMP");
+      break;
+    case IPPROTO_ICMPV6:
+      return("ICMPV6");
+      break;
+    case 112:
+      return("VRRP");
+      break;
+    case IPPROTO_IGMP:
+      return("IGMP");
+      break;
   }
 
-  printf("src=%s:%d dst=%s:%d\n", src_ip, src_port, dst_ip, dst_port);
-  printf("proto = %s.%s.\n", master_protocol, app_protocol);
+  snprintf(proto, sizeof(proto), "%u", proto_id);
+  return(proto);
+}
+
+void printFlow(int tid, struct ndpi_proto proto, struct ndpi_detection_module_struct *ndpi_struct, struct flow_info *flow){
+  json_object *jObj = json_object_new_object();
+
+  // QUEUE
+  json_object_object_add(jObj, "queue", json_object_new_int(tid));
+
+  // PROTOCOL APPLICATION
+  char *proto_base; // e.g. HTTP
+  char *proto_app; // e.g. Facebook
+  proto_base = ndpi_get_proto_name(ndpi_struct, proto.master_protocol);
+  proto_app = ndpi_get_proto_name(ndpi_struct, proto.app_protocol);
+  //int proto_app_id = ndpi_get_protocol_id(ndpi_struct, proto_app);
+  if(proto.master_protocol) {
+    char buf[64];
+    json_object_object_add(jObj, "proto.full-name", json_object_new_string(ndpi_protocol2name(ndpi_struct, proto, buf, sizeof(buf))));
+  } else
+    json_object_object_add(jObj, "proto.full-name", json_object_new_string(proto_app));
+
+  json_object_object_add(jObj, "proto.master-name", json_object_new_string(proto_base));
+  json_object_object_add(jObj, "proto.app-name", json_object_new_string(proto_app));
+  json_object_object_add(jObj, "proto.app-id", json_object_new_int(proto.app_protocol));
+  json_object_object_add(jObj, "proto.master-id", json_object_new_int(proto.master_protocol));
+
+  // BREED
+  ndpi_protocol_breed_t breed = ndpi_get_proto_breed(ndpi_struct, proto.app_protocol);
+  json_object_object_add(jObj, "proto.breed", json_object_new_string(ndpi_get_proto_breed_name(ndpi_struct, breed)));
+
+
+  // CATEGORY
+  if(proto.category != 0){
+    json_object_object_add(jObj, "proto.category-name", json_object_new_string(ndpi_category_get_name(ndpi_struct, proto.category)));
+    json_object_object_add(jObj, "proto.category-id", json_object_new_int((unsigned int)proto.category));
+  } else {
+    json_object_object_add(jObj, "proto.category-name", json_object_new_string(""));
+    json_object_object_add(jObj, "proto.category-id", json_object_new_int(0));
+  }
+
+  // URL DATA
+  json_object_object_add(jObj, "http.url", json_object_new_string(ndpi_get_http_url(ndpi_struct, flow->ndpi_flow)));
+  json_object_object_add(jObj, "http.content-type", json_object_new_string(ndpi_get_http_content_type(ndpi_struct, flow->ndpi_flow)));
+
+  // NETWORK DATA
+  u_int16_t sport, dport;
+  char *l4_protocol_name = ipProto2Name(flow->protocol);
+  if (strcmp(l4_protocol_name, "TCP") == 0 || strcmp(l4_protocol_name, "UDP") == 0){
+    sport = ntohs(flow->src_port), dport = ntohs(flow->dst_port);
+  } else {
+    // non tcp/udp protocols
+    sport = dport = 0;
+  }
+  json_object_object_add(jObj, "net.protocol", json_object_new_string(l4_protocol_name));
+
+  char src_ip_name[48];
+  char dst_ip_name[48];
+  //if(flow->ip_version == IPVERSION) //TODO
+    inet_ntop(AF_INET, &(flow->src_ip), src_ip_name, sizeof(src_ip_name));
+    inet_ntop(AF_INET, &(flow->dst_ip), dst_ip_name, sizeof(dst_ip_name));
+  //else
+  //  inet_ntop(AF_INET6, &(flow->src_ip),  addr_name, sizeof(addr_name));
+  json_object_object_add(jObj, "net.src-ip", json_object_new_string(src_ip_name));
+  json_object_object_add(jObj, "net.src-port", json_object_new_int(sport));
+  json_object_object_add(jObj, "net.dst-ip", json_object_new_string(dst_ip_name));
+  json_object_object_add(jObj, "net.dst-port", json_object_new_int(dport));
+
+
+
+  // GUESS PROTOCOL APPLICATION
+  proto = ndpi_guess_undetected_protocol(ndpi_struct, flow->ndpi_flow, flow->protocol, ntohl(flow->src_ip), ntohs(flow->src_port), ntohl(flow->dst_ip), ntohs(flow->dst_port));
+  proto_base = ndpi_get_proto_name(ndpi_struct, proto.master_protocol);
+  proto_app = ndpi_get_proto_name(ndpi_struct, proto.app_protocol);
+  if(proto.master_protocol) {
+    char buf[64];
+    json_object_object_add(jObj, "proto-guess.full-name", json_object_new_string(ndpi_protocol2name(ndpi_struct, proto, buf, sizeof(buf))));
+  } else
+    json_object_object_add(jObj, "proto-guess.full-name", json_object_new_string(proto_app));
+  json_object_object_add(jObj, "proto-guess.master-name", json_object_new_string(proto_base));
+  json_object_object_add(jObj, "proto-guess.app-name", json_object_new_string(proto_app));
+  json_object_object_add(jObj, "proto-guess.app-id", json_object_new_int(proto.app_protocol));
+  json_object_object_add(jObj, "proto-guess.master-id", json_object_new_int(proto.master_protocol));
+
+  // LOG
+  printf("JSON MAIN: %s\n", json_object_to_json_string(jObj));
+  json_object_put(jObj);// free
 }
 
 /*
  * Callback function called for each packet 
  */
-static int cb(struct nfq_q_handle *qh, struct nfgenmsg *nfmsg,
-    struct nfq_data *nfa, void *data)
-{
+static int cb(struct nfq_q_handle *qh, struct nfgenmsg *nfmsg, struct nfq_data *nfa, void *data) {
   // read thread-specific data
   struct q_data *t_data = (struct q_data *)data;
 
   int id;
-  struct ndpi_proto proto;
-  char *app_proto; // e.g. Facebook
-  char *master_proto; // e.g. HTTP
-  unsigned char *packet_data;
-
-  char src_ip[15], dst_ip[15];
-
   struct nfqnl_msg_packet_hdr *pkt_hdr = nfq_get_msg_packet_hdr(nfa);
   if (pkt_hdr) {
     id = ntohl(pkt_hdr->packet_id);
@@ -106,6 +186,7 @@ static int cb(struct nfq_q_handle *qh, struct nfgenmsg *nfmsg,
     gettimeofday(&tv, NULL);
   }
 
+  unsigned char *packet_data;
   unsigned short payload_size;
   payload_size = nfq_get_payload(nfa, &packet_data);
 
@@ -114,36 +195,14 @@ static int cb(struct nfq_q_handle *qh, struct nfgenmsg *nfmsg,
     return -1;
   }
 
-  // detect protocol
-  proto = detect_protocol(packet_data, payload_size, tv, t_data->workflow); 
-  master_proto = ndpi_get_proto_name(t_data->workflow->ndpi_struct, proto.master_protocol);
-  app_proto = ndpi_get_proto_name(t_data->workflow->ndpi_struct, proto.app_protocol);
+  struct flow_info *flow;
+  flow = detect_protocol(packet_data, payload_size, tv, t_data->workflow);
 
-  // determine source and destination
-  struct iphdr *ip_info = (struct iphdr *)packet_data;
-  char *src_ip_ptr = inet_ntoa(*((struct in_addr *)&(ip_info->saddr)));
-  strncpy(src_ip, src_ip_ptr, sizeof(src_ip));
-  char *dst_ip_ptr = inet_ntoa(*((struct in_addr *)&(ip_info->daddr)));
-  strncpy(dst_ip, dst_ip_ptr, sizeof(dst_ip));
 
-  unsigned short dst_port;
-  unsigned short src_port;
-  if (ip_info->protocol == IPPROTO_TCP) {
-    struct tcphdr *tcp_info = (struct tcphdr *)(packet_data + sizeof(*ip_info));
-    dst_port = ntohs(tcp_info->dest);
-    src_port = ntohs(tcp_info->source);
-  } else if (ip_info->protocol == IPPROTO_UDP) {
-    struct udphdr *udp_info = (struct udphdr *)(packet_data + sizeof(*ip_info));
-    dst_port = ntohs(udp_info->dest);
-    src_port = ntohs(udp_info->source);
-  } else {
-    dst_port = src_port = 0;
-  }
+  struct ndpi_proto proto;
+  proto = flow->detected_protocol;
 
-  if (!Quiet) {
-    print_pkt(t_data->id, nfa, pkt_hdr, src_ip, dst_ip, src_port, dst_port, 
-        master_proto, app_proto);
-  }
+  printFlow(t_data->id, proto, t_data->workflow->ndpi_struct, flow);// PRINT
 
   // free idle flows
   t_data->workflow->timestamp = ((uint64_t) tv.tv_sec) * TICK_RESOLUTION + 
