@@ -91,7 +91,7 @@ static int ndpi_workflow_node_cmp(const void *a, const void *b) {
       (flow_a->dst_port > flow_b->dst_port)) {
     return(1);
   } else {
-    printf("Something went wrong during flow comparison.\n");
+    fprintf(stderr, "WARNING: Something went wrong during flow comparison.\n");
     return 0; // should not be reached
   }
 }
@@ -179,13 +179,13 @@ get_flow_info(struct ndpi_workflow *workflow, const struct ndpi_iphdr *iph,
     // create a new flow
 
     if (workflow->flow_count > workflow->max_flows) {
-      printf("ERROR: max number of flows was exceeded.\n");
+      fprintf(stderr, "ERROR: max number of flows was exceeded.\n");
       return NULL;
     } else {
       struct flow_info *ret = malloc(sizeof(struct flow_info));
 
       if (ret == NULL) {
-        printf("ERROR: cannot allocate new flow.\n");
+        fprintf(stderr, "ERROR: cannot allocate new flow.\n");
         return NULL;
       } else {
         memset(ret, 0, sizeof(struct flow_info));
@@ -201,21 +201,21 @@ get_flow_info(struct ndpi_workflow *workflow, const struct ndpi_iphdr *iph,
 
       ret->ndpi_flow = ndpi_flow_malloc(SIZEOF_FLOW_STRUCT);
       if (ret->ndpi_flow == NULL) {
-        printf("ERROR: not enough memory to create a new ndpi flow.\n");
+        fprintf(stderr, "ERROR: not enough memory to create a new ndpi flow.\n");
         return NULL;
       }
       memset(ret->ndpi_flow, 0, SIZEOF_FLOW_STRUCT);
 
       ret->src_id = ndpi_flow_malloc(SIZEOF_ID_STRUCT);
       if (ret->src_id == NULL) {
-        printf("ERROR: not enough memory to create a new src_id.\n");
+        fprintf(stderr, "ERROR: not enough memory to create a new src_id.\n");
         return NULL;
       }
       memset(ret->src_id, 0, SIZEOF_ID_STRUCT);
 
       ret->dst_id = ndpi_flow_malloc(SIZEOF_ID_STRUCT);
       if (ret->dst_id == NULL) {
-        printf("ERROR: not enough memory to create a new dst_id.\n");
+        fprintf(stderr, "ERROR: not enough memory to create a new dst_id.\n");
         return NULL;
       }
       memset(ret->dst_id, 0, SIZEOF_ID_STRUCT);
@@ -361,7 +361,7 @@ detect_protocol(const unsigned char *packet, const unsigned short packetlen,
     flow->packets++;
     flow->last_seen = tick;
   } else {
-    printf("ERROR: an error occured during get_flow_info.\n");
+    fprintf(stderr, "ERROR: an error occured during get_flow_info.\n");
     exit(1);
   }
 

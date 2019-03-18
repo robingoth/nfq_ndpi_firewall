@@ -46,7 +46,7 @@ static FILE *results_file   = NULL;
 /** User preferences **/
 u_int8_t enable_protocol_guess = 1;
 
-void t_printf(int tid, char *format, ...);
+void t_printf(int st, int tid, char *format, ...);
 
 /**
  * From IPPROTO to string NAME
@@ -177,7 +177,7 @@ static int cb(struct nfq_q_handle *qh, struct nfgenmsg *nfmsg, struct nfq_data *
   if (pkt_hdr) {
     id = ntohl(pkt_hdr->packet_id);
   } else {
-    t_printf(t_data->id, "Packet header could not be retrieved.\n");
+    t_printf(1, t_data->id, "Packet header could not be retrieved.\n");
     return -1; //error code of nfq_set_verdict
   }
 
@@ -194,7 +194,7 @@ static int cb(struct nfq_q_handle *qh, struct nfgenmsg *nfmsg, struct nfq_data *
   payload_size = nfq_get_payload(nfa, &packet_data);
 
   if (payload_size == -1) {
-    t_printf(t_data->id, "Packet payload was not retrieved. Skipping current packet.\n");
+    t_printf(1, t_data->id, "Packet payload was not retrieved. Skipping current packet.\n");
     return -1;
   }
 
@@ -226,14 +226,15 @@ static int cb(struct nfq_q_handle *qh, struct nfgenmsg *nfmsg, struct nfq_data *
  *	tid - thread id
  *	format - string format like for printf()
  */
-void t_printf(int tid, char *format, ...){
+void t_printf(int st, int tid, char *format, ...){
   if (!Verbose)
     return;
 
   va_list ap;
   va_start(ap, format);
   printf("Queue %d: ", tid);
-  vfprintf(stdout, format, ap);
+  if (!st) vfprintf(stdout, format, ap);
+  else vfprintf(stderr, format, ap);
   va_end(ap);
 }
 
@@ -245,36 +246,36 @@ void *process_thread(void *data){
   // retrieve thread-specific data
   struct q_data *t_data = (struct q_data *)data;
 
-  t_printf(t_data->id, "opening library handle\n");
+  t_printf(0, t_data->id, "opening library handle\n");
   t_data->handle = nfq_open();
   if (!t_data->handle) {
-    t_printf(t_data->id, "error during nfq_open()\n");
+    t_printf(1, t_data->id, "ERROR: during nfq_open()\n");
     exit(1);
   }
 
-  t_printf(t_data->id, "unbinding existing nf_queue handler for AF_INET (if any)\n");
+  t_printf(0, t_data->id, "unbinding existing nf_queue handler for AF_INET (if any)\n");
   if (nfq_unbind_pf(t_data->handle, AF_INET) < 0) {
-    t_printf(t_data->id, "error during nfq_unbind_pf()\n");
+    t_printf(1, t_data->id, "ERROR: during nfq_unbind_pf()\n");
     exit(1);
   }
 
 
-  t_printf(t_data->id, "binding nfnetlink_queue as nf_queue handler for AF_INET\n");
+  t_printf(0, t_data->id, "binding nfnetlink_queue as nf_queue handler for AF_INET\n");
   if (nfq_bind_pf(t_data->handle, AF_INET) < 0) {
-    t_printf(t_data->id, "error during nfq_bind_pf()\n");
+    t_printf(1, t_data->id, "ERROR: during nfq_bind_pf()\n");
     exit(1);
   }
 
-  t_printf(t_data->id, "binding this socket to queue '%d'\n", t_data->id);
+  t_printf(0, t_data->id, "binding this socket to queue '%d'\n", t_data->id);
   t_data->q_handle = nfq_create_queue(t_data->handle, t_data->id, &cb, (void *)t_data);
   if (!t_data->q_handle) {
-    t_printf(t_data->id, "error during nfq_create_queue()\n");
+    t_printf(1, t_data->id, "ERROR: during nfq_create_queue()\n");
     exit(1);
   }
 
-  t_printf(t_data->id, "setting copy_packet mode\n");
+  t_printf(0, t_data->id, "setting copy_packet mode\n");
   if (nfq_set_mode(t_data->q_handle, NFQNL_COPY_PACKET, 0xffff) < 0) {
-    t_printf(t_data->id, "can't set packet_copy mode\n");
+    t_printf(1, t_data->id, "ERROR: can't set packet_copy mode\n");
     exit(1);
   }
 
@@ -283,14 +284,14 @@ void *process_thread(void *data){
   t_data->nh = nfq_nfnlh(t_data->handle);
   t_data->sockfd = nfnl_fd(t_data->nh);
 
-  t_printf(t_data->id, "setting buffer size to %d\n", BUFFERSIZE);
+  t_printf(0, t_data->id, "setting buffer size to %d\n", BUFFERSIZE);
   nfnl_rcvbufsiz(t_data->nh, BUFFERSIZE);
 
   // set socket option NETLINK_NO_ENOBUFS for performance improvement
   opt = 1;
   if (setsockopt(t_data->sockfd, SOL_NETLINK, NETLINK_NO_ENOBUFS, 
         &opt, sizeof(int)) == -1) {
-    printf("ERROR: Can't set netlink enobufs: %s", strerror(errno));
+    fprintf(stderr, "ERROR: Can't set netlink enobufs: %s", strerror(errno));
     exit(1);
   }
 
@@ -317,17 +318,17 @@ void *process_thread(void *data){
           continue;
         } else {
           Errors++;
-          printf("Errors = %d\n", Errors);
+          fprintf(stderr, "ERROR: Errors = %d\n", Errors);
           break; /* Other errors drop out of the loop. */
         }
       }
     }
   }
 
-  t_printf(t_data->id, "unbinding from queue %d\n", t_data->id);
+  t_printf(0, t_data->id, "unbinding from queue %d\n", t_data->id);
   nfq_destroy_queue(t_data->q_handle);
 
-  t_printf(t_data->id, "closing library handle\n");
+  t_printf(0, t_data->id, "closing library handle\n");
   nfq_close(t_data->handle);
 
   pthread_exit(NULL);
@@ -451,23 +452,23 @@ static void parseOptions(int argc, char **argv) {
     help(1);
   }
   if (MaxIdleFlows <= 0){
-    printf("Error: max-idle-flows has not a valid value.\n\n");
+    printf("ERROR: max-idle-flows has not a valid value.\n\n");
     help(1);
   }
   if (MaxIdleTime <= 0){
-    printf("Error: max-idle-time has not a valid value.\n\n");
+    printf("ERROR: max-idle-time has not a valid value.\n\n");
     help(1);
   }
   if (IdleScanPeriod <= 0){
-    printf("Error: idle-scan-period has not a valid value.\n\n");
+    printf("ERROR: idle-scan-period has not a valid value.\n\n");
     help(1);
   }
   if (MaxFlows <= 0){
-    printf("Error: max-flows has not a valid value.\n\n");
+    printf("ERROR: max-flows has not a valid value.\n\n");
     help(1);
   }
   if (NumRoots <= 0){
-    printf("Error: num-roots has not a valid value.\n\n");
+    printf("ERROR: num-roots has not a valid value.\n\n");
     help(1);
   }
 }
@@ -495,7 +496,7 @@ int main(int argc, char **argv){
 
     struct ndpi_workflow *workflow = ndpi_calloc(1, sizeof(struct ndpi_workflow));
     if (workflow == NULL) {
-      printf("ERROR: workflow initialization failed");
+      fprintf(stderr, "ERROR: workflow initialization failed");
       exit(1);
     }
 
@@ -507,14 +508,14 @@ int main(int argc, char **argv){
 
     workflow->ndpi_flows_root = ndpi_calloc(workflow->num_roots, sizeof(void *));
     if (workflow->ndpi_flows_root == NULL) {
-      printf("ERROR: ndpi_flows_root initialization failed");
+      fprintf(stderr, "ERROR: ndpi_flows_root initialization failed");
       exit(1);
     }
 
     workflow->max_idle_flows = MaxIdleFlows;
     workflow->idle_flows = ndpi_calloc(MaxIdleFlows, sizeof(struct flow_info *));
     if (workflow->idle_flows == NULL) {
-      printf("ERROR: idle_flows initialization failed");
+      fprintf(stderr, "ERROR: idle_flows initialization failed");
       exit(1);
     }
 
@@ -530,7 +531,7 @@ int main(int argc, char **argv){
     rc = pthread_create(&threads[i], NULL, process_thread, &data[i]);
 
     if (rc) {
-      printf("ERROR; return code from pthread_create() is %d\n", rc);
+      fprintf(stderr, "ERROR: return code from pthread_create() is %d\n", rc);
       exit(1);
     }
   }
@@ -538,7 +539,7 @@ int main(int argc, char **argv){
   for (i = 0; i < QueueSize; i++) {
     rc = pthread_join(threads[i], &status);
     if (rc) {
-      printf("ERROR; return code from pthread_join() is %d\n", rc);
+      fprintf(stderr, "ERROR; return code from pthread_join() is %d\n", rc);
       exit(1);
     }
 
