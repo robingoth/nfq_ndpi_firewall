@@ -256,26 +256,23 @@ static void free_flow_partially(struct flow_info *flow) {
  *  Set SSH/SSL specific fields of flow
  */
 static void process_ndpi_collected_info(struct ndpi_workflow * workflow, struct flow_info *flow) {
-  if (flow->ndpi_flow == NULL) {
-    printf("ERROR: flow is NULL \n");
-    exit(1);
-  }
+  if(!flow->ndpi_flow) return;
 
-  if (flow->detected_protocol.app_protocol != NDPI_PROTOCOL_DNS) {
+  if(flow->detected_protocol.app_protocol != NDPI_PROTOCOL_DNS) {
     /* SSH */
-    if (flow->detected_protocol.app_protocol == NDPI_PROTOCOL_SSH) {
+    if(flow->detected_protocol.app_protocol == NDPI_PROTOCOL_SSH) {
       snprintf(flow->ssh_ssl.client_info, sizeof(flow->ssh_ssl.client_info), "%s",
-          flow->ndpi_flow->protos.ssh.client_signature);
-
+         flow->ndpi_flow->protos.ssh.client_signature);
       snprintf(flow->ssh_ssl.server_info, sizeof(flow->ssh_ssl.server_info), "%s",
-          flow->ndpi_flow->protos.ssh.server_signature);
-    } else if ((flow->detected_protocol.app_protocol == NDPI_PROTOCOL_SSL) || 
-        (flow->detected_protocol.master_protocol == NDPI_PROTOCOL_SSL)) {
+         flow->ndpi_flow->protos.ssh.server_signature);
+    }
+    /* SSL */
+    else if((flow->detected_protocol.app_protocol == NDPI_PROTOCOL_SSL)
+      || (flow->detected_protocol.master_protocol == NDPI_PROTOCOL_SSL)) {
       snprintf(flow->ssh_ssl.client_info, sizeof(flow->ssh_ssl.client_info), "%s",
-          flow->ndpi_flow->protos.stun_ssl.ssl.client_certificate);
-
+         flow->ndpi_flow->protos.stun_ssl.ssl.client_certificate);
       snprintf(flow->ssh_ssl.server_info, sizeof(flow->ssh_ssl.server_info), "%s",
-          flow->ndpi_flow->protos.stun_ssl.ssl.server_certificate);
+         flow->ndpi_flow->protos.stun_ssl.ssl.server_certificate);
     }
   }
 
