@@ -41,6 +41,8 @@ int MaxIdleTime             = 30000;
 int MaxIdleFlows            = 1024;
 int Errors                  = 0;
 static u_int8_t Verbose     = 0;
+static char *results_path   = NULL;
+static FILE *results_file   = NULL;
 /** User preferences **/
 u_int8_t enable_protocol_guess = 1;
 
@@ -154,8 +156,11 @@ void printFlow(int tid, struct ndpi_proto proto, struct ndpi_detection_module_st
   json_object_object_add(jObj, "proto-guess.app-id", json_object_new_int(proto.app_protocol));
   json_object_object_add(jObj, "proto-guess.master-id", json_object_new_int(proto.master_protocol));
 
-  ////
-  if (Verbose > 1) printf("%s\n", json_object_to_json_string(jObj));
+  //// OUTPUT
+  FILE *out = results_file ? results_file : stdout;
+  fprintf(out, "%s\n", json_object_to_json_string(jObj));
+  if (results_file)
+    fflush(out);
 
   json_object_put(jObj);// free
 }
@@ -362,6 +367,7 @@ static void help(u_int long_help) {
    "  -i <num ms>               | Time period in milliseconds of scans for idle flows. Default: 100 ms.\n"
    "  -t <num ms>               | Maximum amount of time in milliseconds a flow can be idle. Default: 30000 ms.\n"
    "  -F <num idle flows>       | Maximum number of idle flows. Default: 1024.\n"
+   "  -w <path>                 | Write test output on the specified file.\n"
    "  -v <1|2>                  | Verbose.\n"
    "                            | 1 = verbose\n"
    "                            | 2 = very verbose\n"
@@ -372,7 +378,7 @@ static void help(u_int long_help) {
 }
 
 static struct option longopts[] = {
-  { "enable-protocol-guess", no_argument, NULL, 'd'},
+  { "enable-protocol-guess", no_argument,       NULL, 'd'},
   { "queue",                 required_argument, NULL, 'q'},
   { "num-roots",             required_argument, NULL, 'r'},
   { "max-idle-flows",        required_argument, NULL, 'F'},
@@ -380,9 +386,10 @@ static struct option longopts[] = {
   { "idle-scan-period",      required_argument, NULL, 'i'},
   { "max-idle-time",         required_argument, NULL, 't'},
   { "verbose",               required_argument, NULL, 'v'},
-  { "version",               no_argument, NULL, 'V'},
-  { "help",                  no_argument, NULL, 'h'},
-  { 0,                       0,           0,     0}
+  { "result-path",           required_argument, NULL, 'w'},
+  { "version",               no_argument,       NULL, 'V'},
+  { "help",                  no_argument,       NULL, 'h'},
+  { 0,                       0,                 0,     0 }
 };
 
 /**
@@ -393,7 +400,7 @@ static void parseOptions(int argc, char **argv) {
   int opt;
   char* endptr;
 
-  while((opt = getopt_long(argc, argv, "dq:r:F:f:i:t:v:Vh", longopts, &option_idx)) != EOF) {
+  while((opt = getopt_long(argc, argv, "dq:r:F:f:i:t:w:v:Vh", longopts, &option_idx)) != EOF) {
     switch (opt) {
       case 'd':
         enable_protocol_guess = 0;
@@ -415,6 +422,13 @@ static void parseOptions(int argc, char **argv) {
         break;
       case 't':
         MaxIdleTime = strtoimax(optarg, &endptr, 10);
+        break;
+      case 'w':
+        results_path = strdup(optarg);
+        if ((results_file = fopen(results_path, "w")) == NULL) {
+          printf("Unable to write in file %s: quitting\n", results_path);
+          return;
+        }
         break;
       case 'v':
         Verbose = strtoimax(optarg, &endptr, 10);
@@ -511,7 +525,7 @@ int main(int argc, char **argv){
 
   // create threads
   for (i = 0; i < QueueSize; i++) {
-    if (Verbose) printf("Main: creating thread %d\n", i);
+    if (Verbose > 1) printf("Main: creating thread %d\n", i);
 
     rc = pthread_create(&threads[i], NULL, process_thread, &data[i]);
 
@@ -528,10 +542,13 @@ int main(int argc, char **argv){
       exit(1);
     }
 
-    if (Verbose) printf("Main: completed join with thread %d having a status of %ld\n", i, (long)status);
+    if (Verbose > 1) printf("Main: completed join with thread %d having a status of %ld\n", i, (long)status);
   }
 
-  if (Verbose) printf("Main: program completed. Exiting.\n");
+  if (Verbose > 1) printf("Main: program completed. Exiting.\n");
+
+  if(results_path)  free(results_path);
+  if(results_file)  fclose(results_file);
 
   pthread_mutex_destroy(&mutex_c);
   pthread_mutex_destroy(&mutex_pt);
