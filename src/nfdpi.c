@@ -33,14 +33,14 @@ struct q_data {
 // Globals
 pthread_mutex_t mutex, mutex_c, mutex_pt;
 static char *QueueNum[MAX_NUM_QUEUES];
-int QueueSize = 0;
-int Quiet = 0;
-int NumRoots = 512; 
-int MaxFlows = 200000000;
-int IdleScanPeriod = 100; 
-int MaxIdleTime = 30000; 
-int MaxIdleFlows = 1024;
-int Errors = 0;
+int QueueSize               = 0;
+int NumRoots                = 512; 
+int MaxFlows                = 200000000;
+int IdleScanPeriod          = 100; 
+int MaxIdleTime             = 30000; 
+int MaxIdleFlows            = 1024;
+int Errors                  = 0;
+static u_int8_t Verbose     = 0;
 /** User preferences **/
 u_int8_t enable_protocol_guess = 1;
 
@@ -104,7 +104,6 @@ void printFlow(int tid, struct ndpi_proto proto, struct ndpi_detection_module_st
   ndpi_protocol_breed_t breed = ndpi_get_proto_breed(ndpi_struct, proto.app_protocol);
   json_object_object_add(jObj, "proto.breed", json_object_new_string(ndpi_get_proto_breed_name(ndpi_struct, breed)));
 
-
   // CATEGORY
   if(proto.category != 0){
     json_object_object_add(jObj, "proto.category-name", json_object_new_string(ndpi_category_get_name(ndpi_struct, proto.category)));
@@ -141,8 +140,6 @@ void printFlow(int tid, struct ndpi_proto proto, struct ndpi_detection_module_st
   json_object_object_add(jObj, "net.dst-ip", json_object_new_string(dst_ip_name));
   json_object_object_add(jObj, "net.dst-port", json_object_new_int(dport));
 
-
-
   // GUESS PROTOCOL APPLICATION
   proto = ndpi_guess_undetected_protocol(ndpi_struct, flow->ndpi_flow, flow->protocol, ntohl(flow->src_ip), ntohs(flow->src_port), ntohl(flow->dst_ip), ntohs(flow->dst_port));
   proto_base = ndpi_get_proto_name(ndpi_struct, proto.master_protocol);
@@ -157,8 +154,9 @@ void printFlow(int tid, struct ndpi_proto proto, struct ndpi_detection_module_st
   json_object_object_add(jObj, "proto-guess.app-id", json_object_new_int(proto.app_protocol));
   json_object_object_add(jObj, "proto-guess.master-id", json_object_new_int(proto.master_protocol));
 
-  // LOG
-  printf("JSON MAIN: %s\n", json_object_to_json_string(jObj));
+  ////
+  if (Verbose > 1) printf("%s\n", json_object_to_json_string(jObj));
+
   json_object_put(jObj);// free
 }
 
@@ -224,6 +222,9 @@ static int cb(struct nfq_q_handle *qh, struct nfgenmsg *nfmsg, struct nfq_data *
  *	format - string format like for printf()
  */
 void t_printf(int tid, char *format, ...){
+  if (!Verbose)
+    return;
+
   va_list ap;
   va_start(ap, format);
   printf("Queue %d: ", tid);
@@ -329,6 +330,9 @@ void *process_thread(void *data){
 }
 
 void print_setup(){
+  if (!Verbose)
+    return;
+
   printf("Configuration of this run is the following:\n");
   printf("\tnumber of queues \t %d\n", QueueSize);
   printf("\tnumber of roots \t %d\n", NumRoots);
@@ -336,7 +340,8 @@ void print_setup(){
   printf("\tidle scan period \t %d\n", IdleScanPeriod);
   printf("\tmaximum idle time \t %d\n", MaxIdleTime);
   printf("\tmaximum idle flows \t %d\n", MaxIdleFlows);
-  printf("\tquiet \t\t\t %d\n", Quiet);
+  printf("\tverbose \t\t %d\n", Verbose);
+  printf("\n");
 }
 
 static void printVersion(){
@@ -357,7 +362,9 @@ static void help(u_int long_help) {
    "  -i <num ms>               | Time period in milliseconds of scans for idle flows. Default: 100 ms.\n"
    "  -t <num ms>               | Maximum amount of time in milliseconds a flow can be idle. Default: 30000 ms.\n"
    "  -F <num idle flows>       | Maximum number of idle flows. Default: 1024.\n"
-   "  -Q                        | Quiet mode.\n"
+   "  -v <1|2>                  | Verbose.\n"
+   "                            | 1 = verbose\n"
+   "                            | 2 = very verbose\n"
    "  -v                        | Display version.\n"
    "  -h                        | Display this help.\n");
 
@@ -372,10 +379,9 @@ static struct option longopts[] = {
   { "max-flows",             required_argument, NULL, 'f'},
   { "idle-scan-period",      required_argument, NULL, 'i'},
   { "max-idle-time",         required_argument, NULL, 't'},
-  { "version",               no_argument, NULL, 'v'},
+  { "verbose",               required_argument, NULL, 'v'},
   { "version",               no_argument, NULL, 'V'},
   { "help",                  no_argument, NULL, 'h'},
-  { "quiet",                 no_argument, NULL, 'Q'},
   { 0,                       0,           0,     0}
 };
 
@@ -387,7 +393,7 @@ static void parseOptions(int argc, char **argv) {
   int opt;
   char* endptr;
 
-  while((opt = getopt_long(argc, argv, "dq:r:F:f:i:t:QvVh", longopts, &option_idx)) != EOF) {
+  while((opt = getopt_long(argc, argv, "dq:r:F:f:i:t:v:Vh", longopts, &option_idx)) != EOF) {
     switch (opt) {
       case 'd':
         enable_protocol_guess = 0;
@@ -410,10 +416,9 @@ static void parseOptions(int argc, char **argv) {
       case 't':
         MaxIdleTime = strtoimax(optarg, &endptr, 10);
         break;
-      case 'Q':
-        Quiet = 1;
-        break;
       case 'v':
+        Verbose = strtoimax(optarg, &endptr, 10);
+        break;
       case 'V':
         printVersion();
         exit(0);
@@ -506,7 +511,8 @@ int main(int argc, char **argv){
 
   // create threads
   for (i = 0; i < QueueSize; i++) {
-    printf("Main: creating thread %d\n", i);
+    if (Verbose) printf("Main: creating thread %d\n", i);
+
     rc = pthread_create(&threads[i], NULL, process_thread, &data[i]);
 
     if (rc) {
@@ -522,10 +528,10 @@ int main(int argc, char **argv){
       exit(1);
     }
 
-    printf("Main: completed join with thread %d having a status of %ld\n", i, (long)status);
+    if (Verbose) printf("Main: completed join with thread %d having a status of %ld\n", i, (long)status);
   }
 
-  printf("Main: program completed. Exiting.\n");
+  if (Verbose) printf("Main: program completed. Exiting.\n");
 
   pthread_mutex_destroy(&mutex_c);
   pthread_mutex_destroy(&mutex_pt);
