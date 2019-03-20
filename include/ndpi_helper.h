@@ -3,7 +3,6 @@
 
 #include <ndpi_main.h>
 
-#define SIZEOF_FLOW_STRUCT (sizeof(struct ndpi_flow_struct))
 #define TICK_RESOLUTION 1000
 
 // Forward Declarations
@@ -67,7 +66,7 @@ struct flow_info {
 // FUNCTIONS
 struct ndpi_detection_module_struct *setup_detection();
 
-struct ndpi_proto detect_protocol(const unsigned char *packet, 
+struct flow_info* detect_protocol(const unsigned char *packet,
 			const unsigned short packetlen, 
 			struct timeval timestamp,  
 			struct ndpi_workflow *workflow);

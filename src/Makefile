@@ -1,54 +1,48 @@
-# **********************************************************
-# *       This file has to stay inside the src folder      *
-# **********************************************************
-
-# directories with files
-INCDIR = ../include
-OBJDIR = obj
-LIBSDIR = ../lib
-NDPIDIR = $(LIBSDIR)/nDPI
-TESTSDIR = ./tests
-
-PROGRAMNAME = NdpiNfqueueFirewall
-NH_TESTS = NdpiHelperTests
+SYSARCH := $(shell arch)
 
 CC=gcc
-CFLAGS= -Wall -g -I$(INCDIR) -I$(NDPIDIR)/src/include $(LIBSDIR)/nDPI/lib/libndpi.a
-CFLAGS2 = -Wall -g -I$(INCDIR) -L/usr/local/lib 
+LINC = ../include
+LIBNDPI = ../lib/nDPI/src/lib/libndpi.a
+CFLAGS = -Wall -g -I../lib/nDPI/src/include -I$(LINC)
+LFLAGS = -lndpi -lnetfilter_queue -lpthread -lnetfilter_conntrack -lnfnetlink -ljson
 
-TESTS_CFLAGS = -g -Wall -I$(INCDIR) -I$(NDPIDIR)/src/include -L/usr/local/lib $(LIBSDIR)/nDPI/lib/libndpi.a
-NH_WRAPS = -Wl,--wrap=set_ndpi_malloc,--wrap=set_ndpi_free,--wrap=set_ndpi_flow_malloc,--wrap=set_ndpi_flow_free,--wrap=ndpi_init_detection_module,--wrap=NDPI_BITMASK_SET_ALL,--wrap=ndpi_set_protocol_detection_bitmask2,--wrap=ndpi_detection_process_packet,--wrap=get_flow_info
+PNAME = nfdpi
+OBJ = ./obj
 
-LIBS = -lndpi -lnetfilter_queue -lpthread -lnetfilter_conntrack -lnfnetlink
-TESTLIBS = -lcmocka
+TDIR = ./tests
+TNAME = nfdpi_tests
+TWRAPS = -Wl,--wrap=set_ndpi_malloc,--wrap=set_ndpi_free,--wrap=set_ndpi_flow_malloc,--wrap=set_ndpi_flow_free,--wrap=ndpi_init_detection_module,--wrap=NDPI_BITMASK_SET_ALL,--wrap=ndpi_set_protocol_detection_bitmask2,--wrap=ndpi_detection_process_packet,--wrap=get_flow_info
+TLFLAGS = -lcmocka
 
-_DEPS = ndpi_helper.h conntrack_helper.h
-# Replace all filenames in dependencies with a relative path
-DEPS = $(patsubst %, $(INCDIR)/%, $(_DEPS))
 
-_OBJS = nfqueue_test.o ndpi_helper.o conntrack_helper.o
-_OBJS_NH_TESTS = ndpi_helper_tests.o ndpi_helper.o
+#########################################################################
+all: $(PNAME)
+#all: $(PNAME) $(TDIR)/$(TNAME)
 
-# Replace all filenames in objects with a relative path
-OBJS = $(patsubst %, $(OBJDIR)/%, $(_OBJS))
-OBJS_NH_TESTS = $(patsubst %, $(OBJDIR)/%, $(_OBJS_NH_TESTS))
+########################### OBJECT -> BINARY ###########################
+nfdpi: $(OBJ)/nfdpi.o $(OBJ)/ndpi_helper.o $(OBJ)/conntrack_helper.o $(LIBNDPI)
+	$(CC) -o $@ $(OBJ)/nfdpi.o $(OBJ)/ndpi_helper.o $(OBJ)/conntrack_helper.o $(LIBNDPI) $(LFLAGS)
 
-$(OBJDIR)/%.o: %.c $(DEPS)
-	$(CC) -c -o $@ $< $(CFLAGS) 
+$(TDIR)/nfdpi_tests: $(TDIR)/nfdpi_helper_tests.c $(OBJ)/nfdpi_helper_tests.o $(OBJ)/ndpi_helper.o $(LIBNDPI)
+	$(CC) -o $(TDIR)/$@ $(TLFLAGS) $(TWRAPS) $(LIBNDPI)
+############################ SOURCE -> OBJECT###########################
+$(OBJ)/nfdpi.o: nfdpi.c
+	$(CC) -o $@ -c $(CFLAGS) nfdpi.c
 
-$(OBJDIR)/%.o: $(TESTSDIR)/%.c $(DEPS)
-	$(CC) -c -o $@ $< $(TESTS_CFLAGS)  
+$(OBJ)/ndpi_helper.o: ndpi_helper.c $(LINC)/ndpi_helper.h $(LINC)/conntrack_helper.h
+	$(CC) -o $@ -c $(CFLAGS) ndpi_helper.c
 
-all: $(PROGRAMNAME) 
+$(OBJ)/conntrack_helper.o: conntrack_helper.c $(LINC)/conntrack_helper.h
+	$(CC) -o $@ -c $(CFLAGS) conntrack_helper.c
 
-$(PROGRAMNAME): $(OBJS) 
-	$(CC) -o $@ $^ $(CFLAGS) $(LIBS)
+$(OBJ)/nfdpi_helper_tests.o: $(TDIR)/nfdpi_helper_tests.c
+	$(CC) -o $@ -c $(CFLAGS) $(TDIR)/nfdpi_helper_tests.c
+#########################################################################
+test: $(TNAME)
+	./tests/$(TNAME)
 
-$(NH_TESTS): $(OBJS_NH_TESTS)
-	$(CC) -o $(TESTSDIR)/$@ $^ $(TESTS_CFLAGS) $(NH_WRAPS) $(TESTLIBS) 
-
-test: $(NH_TESTS)
-	$(TESTSDIR)/$(NH_TESTS)
-
+#########################################################################
 clean:
-	rm -f $(OBJDIR)/*.o $(PROGRAMNAME) $(TESTSDIR)/$(NH_TESTS)
+	rm -f $(OBJ)/*.o *.o $(PNAME) $(TDIR)/$(TNAME)
+
+#########################################################################
